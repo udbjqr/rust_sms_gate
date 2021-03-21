@@ -1,16 +1,15 @@
 use std::error::Error;
 
-
-use test_ruest::{ClientEntity};
 use tokio::sync::mpsc;
-use test_ruest::cmpp::Cmpp;
+
+use sms_gate::{ClientEntity, ProtocolType};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
 	simple_logger::SimpleLogger::new().init().expect("SimpleLogger 日志无法启动。");
 
 	let addr = String::from("127.0.0.1:7890");
-	let mut client = ClientEntity::new(addr, "103996".parse().unwrap(), String::from("123456"), 2,Cmpp::new());
+	let mut client = ClientEntity::new(addr, "103996".parse().unwrap(), String::from("123456"), 2, ProtocolType::CMPP);
 
 	//这个是多个人用的
 	let (send_to_server_tx, send_to_server_rx) = mpsc::channel::<String>(0xffffffffff);
@@ -27,7 +26,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 		}
 	}
 
-	println!("后面将这个对象给kafka的发送者:{:?}",send_to_server_rx);
+	println!("后面将这个对象给kafka的发送者:{:?}", send_to_server_rx);
 
 	std::thread::park();
 	Ok(())

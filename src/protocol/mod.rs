@@ -12,7 +12,7 @@ pub trait Protocol {
 	fn decode_read_message(&self, buf: &mut BytesMut) -> Result<JsonValue, Error> ;
 }
 
-
+#[derive(Debug)]
 pub enum ProtocolType{
 	CMPP,
 	SGIP,

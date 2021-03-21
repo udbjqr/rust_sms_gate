@@ -7,7 +7,7 @@ use log::{error, info, warn};
 use tokio::io;
 use tokio::net::{TcpSocket, TcpStream};
 use tokio::sync::{mpsc, oneshot};
-use tokio::time::{Duration, sleep};
+use tokio::time::{Duration, sleep,timeout};
 use tokio_util::codec::{Decoder, Encoder, Framed};
 
 use crate::protocol::Protocol;
@@ -68,7 +68,7 @@ impl<T> Channel<T>
 		}
 
 
-		info!("登录成功,准备接收数据..发送消息的发送器。{:?},关闭的触发器:{:?}", self.read_msg_tx, close_trigger);
+		info!("登录成功,准备接收数据..发送消息的发送器。{:?},关闭的触发器:{:?}", self.read_msg_tx, self.channel_msg_rx);
 
 		// self.start_read_data(transport);
 	}
