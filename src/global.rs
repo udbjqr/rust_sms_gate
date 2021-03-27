@@ -1,13 +1,36 @@
 use std::collections::HashMap;
+use std::fs;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, AtomicUsize, Ordering};
 
 use json::JsonValue;
+use lazy_static::lazy_static;
 use tokio::runtime::{Builder, Runtime};
-use tokio::sync::{ RwLock};
+use tokio::sync::RwLock;
 
-use crate::entity::Entity;
 use crate::message_queue::KafkaMessageProducer;
+
+lazy_static! {
+	static ref CONFIG: RwLock<JsonValue> = RwLock::new(load_config_file("setting.json"));
+	static ref SEQUENCE: AtomicU32 = AtomicU32::new(rand::random());
+	// static ref SERVERS_CONFIG: RwLock<JsonValue> = RwLock::new(load_config_file("smsServer.json"));
+}
+
+pub fn load_config_file(file_name: &str) -> JsonValue {
+	let file_text = fs::read_to_string(file_name).unwrap();
+	let json = json::parse(file_text.as_str()).unwrap();
+
+	json
+}
+
+pub async fn get_config_or<T>(name: &str, default: T) -> T
+	where T: FromStr {
+	let config = CONFIG.read().await;
+
+	let result: T = config[name].dump().parse().unwrap_or(default);
+	result
+}
 
 static mut RUNTIME: Option<Arc<Runtime>> = None;
 
@@ -61,33 +84,11 @@ pub fn get_wait_res() -> Arc<RwLock<HashMap<u32, JsonValue>>> {
 }
 
 
-static mut SEQ_ID: Option<Arc<AtomicU32>> = None;
-
-///全局唯一..Sequence_Id
-pub fn get_sequence_id() -> Arc<AtomicU32> {
-	unsafe {
-		SEQ_ID.get_or_insert_with(|| {
-			println!("初始化全局唯一ID");
-			Arc::new(AtomicU32::new(rand::random()))
-		}).clone()
+///全局唯一..Sequence_Id.
+/// 参数为步进多少。
+pub fn get_sequence_id(mut step: u32) -> u32 {
+	if step == 0 {
+		step = 1;
 	}
-}
-
-static mut ENTITY_MAP: Option<Arc<RwLock<HashMap<u32, Arc<dyn Entity>>>>> = None;
-
-pub fn get_entity_map() -> Arc<RwLock<HashMap<u32, Arc<dyn Entity>>>> {
-	unsafe {
-		ENTITY_MAP.get_or_insert_with(|| {
-			Arc::new(RwLock::new(HashMap::new()))
-		}).clone()
-	}
-}
-
-pub async fn get_entity(id: &u32) -> Option<Arc<dyn Entity>> {
-	let en = &get_entity_map();
-	let read = en.read().await;
-	return match read.get(id){
-		Some(n) => Some(n.clone()),
-		None => None
-	}
+	SEQUENCE.fetch_add(step, Ordering::Relaxed)
 }

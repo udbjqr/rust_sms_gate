@@ -667,6 +667,7 @@ dependencies = [
  "encoding",
  "futures",
  "json",
+ "lazy_static",
  "log",
  "md5",
  "num_cpus",

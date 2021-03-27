@@ -1,0 +1,14 @@
+{
+	"config": [
+		{
+			"server_type": "CMPP",
+			"desc": "这是描述",
+			"host": "0.0.0.0:7890"
+		},
+		{
+			"server_type": "SGIP",
+			"desc": "这是描述",
+			"host": "0.0.0.0:8001"
+		}
+	]
+}
