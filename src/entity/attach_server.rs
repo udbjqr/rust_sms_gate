@@ -178,7 +178,7 @@ impl Entity for ServerEntity {
 	}
 
 	fn get_channels(&self) -> Arc<RwLock<Vec<ChannelStates>>> {
-		unimplemented!()
+		self.channels.clone()
 	}
 }
 
