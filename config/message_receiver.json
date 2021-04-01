@@ -1,0 +1,14 @@
+{
+	"bootstrap": {
+		"servers": "192.168.101.99:9092"
+	},
+	"client": {
+		"id": "asServer"
+	},
+	"group": {
+		"id": "asServer",
+		"instance": {
+			"id": "asServer1"
+		}
+	}
+}

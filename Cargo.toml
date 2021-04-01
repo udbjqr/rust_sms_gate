@@ -20,3 +20,14 @@ json = "0.12.4"
 md5 = "*"
 chrono = "0.4.19"
 lazy_static = "*"
+async-trait = "*"
+
+[[bin]]
+name="sms_test"
+path= "src/test_main.rs"
+
+
+[[bin]]
+name="sms_gate"
+path= "src/main.rs"
+

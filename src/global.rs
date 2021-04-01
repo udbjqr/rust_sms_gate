@@ -11,9 +11,17 @@ use tokio::sync::RwLock;
 
 use crate::message_queue::KafkaMessageProducer;
 
+pub static TOPIC_ACCOUNT_MODIFY: &'static str = "account.modify";
+pub static TOPIC_ACCOUNT_ADD: &'static str = "account.add";
+pub static TOPIC_ACCOUNT_REMOVE: &'static str = "account.remove";
+pub static TOPIC_PASSAGE_MODIFY: &'static str = "passage.modify";
+pub static TOPIC_PASSAGE_ADD: &'static str = "passage.add";
+pub static TOPIC_PASSAGE_REMOVE: &'static str = "passage.remove";
+
 lazy_static! {
-	static ref CONFIG: RwLock<JsonValue> = RwLock::new(load_config_file("setting.json"));
+	static ref CONFIG: RwLock<JsonValue> = RwLock::new(load_config_file("config/setting.json"));
 	static ref SEQUENCE: AtomicU32 = AtomicU32::new(rand::random());
+	static ref MESSAGE_SEND: HashMap<&'static str,KafkaMessageProducer> = HashMap::new();
 	// static ref SERVERS_CONFIG: RwLock<JsonValue> = RwLock::new(load_config_file("smsServer.json"));
 }
 

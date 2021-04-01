@@ -1,77 +1,138 @@
-use json::JsonValue;
-use tokio::sync::mpsc;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU64};
 
-use crate::entity::{Entity};
+use async_trait::async_trait;
+use json::JsonValue;
+use tokio::sync::{mpsc, RwLock};
+
+use crate::entity::{ChannelStates, Entity, start_entity};
+use crate::get_runtime;
 use crate::protocol::SmsStatus;
 
 #[derive(Debug)]
 pub struct CustomEntity {
 	id: u32,
 	name: String,
-	sp_id: String,
+	desc: String,
+	login_name: String,
 	password: String,
 	allowed_addr: Vec<String>,
 	read_limit: u32,
 	write_limit: u32,
-	max_channel_number: u8,
-	now_channel_number: u8,
+	max_channel_number: usize,
+	channels: Arc<RwLock<Vec<ChannelStates>>>,
+	config: JsonValue,
+	accumulator: AtomicU64,
+	send_to_manager_tx: mpsc::Sender<JsonValue>,
+	channel_to_entity_tx: Option<mpsc::Sender<JsonValue>>,
 }
 
 impl CustomEntity {
 	pub fn new(id: u32,
 	           name: String,
-	           sp_id: String,
+	           desc: String,
+	           login_name: String,
 	           password: String,
 	           allowed_addr: Vec<String>,
 	           read_limit: u32,
 	           write_limit: u32,
-	           max_channel_number: u8,
+	           max_channel_number: usize,
+	           config: JsonValue,
+	           send_to_manager_tx: mpsc::Sender<JsonValue>,
 	) -> Self {
+		let mut channels: Vec<ChannelStates> = Vec::with_capacity(max_channel_number);
+
+		for _ in 0..max_channel_number {
+			channels.push(ChannelStates::new());
+		}
+
 		CustomEntity {
 			id,
 			name,
-			sp_id,
+			desc,
+			login_name,
 			password,
 			allowed_addr,
 			read_limit,
 			write_limit,
 			max_channel_number,
-			now_channel_number: 0,
+			channels: Arc::new(RwLock::new(channels)),
+			config,
+			accumulator: AtomicU64::new(0),
+			send_to_manager_tx,
+			channel_to_entity_tx: None,
 		}
 	}
 
-	async fn start(&mut self) {
-		unimplemented!()
+
+	pub fn start(&mut self) -> mpsc::Sender<JsonValue> {
+		log::debug!("开始进行实体的启动操作。启动消息接收。id:{}", self.id);
+
+		let (manage_to_entity_tx, manage_to_entity_rx) = mpsc::channel(0xffffffff);
+		let (channel_to_entity_tx, channel_to_entity_rx) = mpsc::channel(0xff);
+
+		//这里开始自己的消息处理
+		get_runtime().spawn(start_entity(manage_to_entity_rx, channel_to_entity_rx, self.channels.clone()));
+
+		self.channel_to_entity_tx = Some(channel_to_entity_tx);
+
+		manage_to_entity_tx
 	}
 }
 
+#[async_trait]
 impl Entity for CustomEntity {
-	fn login_attach(&self, json: JsonValue) -> (SmsStatus<JsonValue>, u32, u32, Option<mpsc::Receiver<JsonValue>>, Option<mpsc::Sender<JsonValue>>) {
-		if self.now_channel_number >= self.max_channel_number {
-			return (SmsStatus::OtherError, 0, 0, None, None);
+	async fn login_attach(&mut self, json: JsonValue) -> (SmsStatus<JsonValue>, u32, u32, Option<mpsc::Receiver<JsonValue>>, Option<mpsc::Receiver<JsonValue>>, Option<mpsc::Sender<JsonValue>>) {
+		//这里已经开了锁。如果下面执行时间有点长。就需要注意。附加操作整个倒是不长。
+		let mut channels = self.channels.write().await;
+		let index = channels.iter().rposition(|i| i.is_active == false);
+
+		if index.is_none() {
+			log::warn!("当前已经满。不再继续增加。entity_id:{}", self.id);
+			return (SmsStatus::OtherError, 0, 0, None, None, None);
 		}
+
+		let index = index.unwrap();
+		let item = channels.get_mut(index).unwrap();
 
 		//TODO 进行地址允许判断
 		//TODO 进行登录判断。
-		(SmsStatus::OtherError, 0, 0, None, None)
+		//TODO 进行密码检验。
+
+		//通过后进行附加上去的动作。
+		let (entity_to_channel_priority_tx, entity_to_channel_priority_rx) = mpsc::channel::<JsonValue>(5);
+		let (entity_to_channel_common_tx, entity_to_channel_common_rx) = mpsc::channel::<JsonValue>(5);
+
+
+		let channel_to_entity_tx = self.channel_to_entity_tx.as_ref().unwrap().clone();
+
+		item.is_active = true;
+		item.can_write = true;
+		item.entity_to_channel_priority_tx = Some(entity_to_channel_priority_tx);
+		item.entity_to_channel_common_tx = Some(entity_to_channel_common_tx);
+
+		let msg = json::object! {
+			msg_type:"create",
+			entity_id : self.id,
+			channel_id : index,
+		};
+
+		if let Err(e) = channel_to_entity_tx.send(msg).await {
+			log::error!("发送消息出现异常。e:{}", e);
+		}
+
+		(SmsStatus::Success(json), self.read_limit, self.write_limit, Some(entity_to_channel_priority_rx), Some(entity_to_channel_common_rx), Some(channel_to_entity_tx))
 	}
 
-	fn send_message(&self, json: JsonValue) {
-		//TODO 收到需要发送的消息的处理。向通道转发消息
+	async fn send_message(&self, _json: JsonValue) {
 		unimplemented!()
 	}
 
 	fn get_id(&self) -> u32 {
-		let n_id = self.id;
-		n_id
+		self.id
 	}
 
-	fn get_read_limit(&self) -> u32 {
-		unimplemented!()
-	}
-
-	fn get_write_limit(&self) -> u32 {
-		unimplemented!()
+	fn get_channels(&self) -> Arc<RwLock<Vec<ChannelStates>>> {
+		self.channels.clone()
 	}
 }
-

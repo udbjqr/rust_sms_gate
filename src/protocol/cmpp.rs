@@ -26,20 +26,20 @@ impl Protocol for Cmpp48 {
 		}
 	}
 
-	fn e_submit_resp(&self, json: &JsonValue) -> BytesMut {
+	fn e_submit_resp(&self, _json: &JsonValue) -> BytesMut {
 		unimplemented!()
 	}
 
-	fn e_deliver_resp(&self, json: &JsonValue) -> BytesMut {
+	fn e_deliver_resp(&self, _json: &JsonValue) -> BytesMut {
 		unimplemented!()
 	}
 
-	fn e_message(&self, json: &JsonValue) -> Result<BytesMut, Error> {
+	fn e_message(&self, _json: &JsonValue) -> Result<BytesMut, Error> {
 		unimplemented!()
 	}
 
 
-	fn e_login_msg(&self, sp_id: &str, password: &str, version: u8) -> Result<BytesMut, io::Error> {
+	fn e_login_msg(&self, sp_id: &str, password: &str, version: &str) -> Result<BytesMut, io::Error> {
 		if sp_id.len() != 6 {
 			return Err(io::Error::new(io::ErrorKind::Other, "sp_id,长度应该为6位"));
 		}
@@ -77,7 +77,11 @@ impl Protocol for Cmpp48 {
 		dst.put_u32(get_sequence_id(1));
 		dst.extend_from_slice(sp_id.as_bytes());
 		dst.extend_from_slice(auth.as_ref());
-		dst.put_u8(version);
+		match version {
+			"2.0" => dst.put_u8(32),
+			"3.0" => dst.put_u8(48),
+			_ => dst.put_u8(48)
+		}
 		dst.put_u32(time);
 
 		Ok(dst)
@@ -218,11 +222,11 @@ impl Protocol for Cmpp48 {
 		}
 	}
 
-	fn get_status_id(&self, t: SmsStatus<JsonValue>) -> u32 {
+	fn get_status_id(&self, _t: SmsStatus<JsonValue>) -> u32 {
 		unimplemented!()
 	}
 
-	fn get_status_enum(&self, v: u32) -> SmsStatus<JsonValue> {
+	fn get_status_enum(&self, _v: u32) -> SmsStatus<JsonValue> {
 		unimplemented!()
 	}
 }

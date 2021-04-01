@@ -5,8 +5,8 @@ use bytes::BytesMut;
 use json::JsonValue;
 use tokio::io;
 
-pub use crate::protocol::msg_type::SmsStatus;
 pub use crate::protocol::msg_type::MsgType;
+pub use crate::protocol::msg_type::SmsStatus;
 
 pub use self::cmpp::Cmpp48;
 pub use self::sgip::Sgip;
@@ -45,14 +45,14 @@ impl Display for ProtocolType {
 	}
 }
 
-pub trait Protocol {
-	fn e_receipt(&self,json: &JsonValue) -> Option<BytesMut>;
+pub trait Protocol: Send + Sync {
+	fn e_receipt(&self, json: &JsonValue) -> Option<BytesMut>;
 	fn e_submit_resp(&self, json: &JsonValue) -> BytesMut;
 	fn e_deliver_resp(&self, json: &JsonValue) -> BytesMut;
 	///生成消息的操作。
-	fn e_message(&self, json: &JsonValue) -> Result<BytesMut,io::Error>;
+	fn e_message(&self, json: &JsonValue) -> Result<BytesMut, io::Error>;
 
-	fn e_login_msg(&self, user_name: &str, password: &str, version: u8) -> Result<BytesMut, io::Error>;
+	fn e_login_msg(&self, user_name: &str, password: &str, version: &str) -> Result<BytesMut, io::Error>;
 	///根据对方给的请求,处理以后的编码消息
 	fn e_login_rep_msg(&self, status: &SmsStatus<JsonValue>) -> BytesMut;
 

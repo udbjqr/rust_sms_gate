@@ -112,7 +112,7 @@ impl Protocol for Sgip {
 	}
 
 
-	fn e_login_msg(&self, sp_id: &str, password: &str, version: u8) -> Result<BytesMut, Error> {
+	fn e_login_msg(&self, sp_id: &str, password: &str, version: &str) -> Result<BytesMut, Error> {
 		unimplemented!()
 	}
 

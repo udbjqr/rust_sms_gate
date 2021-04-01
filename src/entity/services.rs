@@ -13,6 +13,7 @@ pub struct ServersManager {}
 
 
 impl ServersManager {
+	///启动服务准备接受接入
 	pub fn start() -> Result<(), io::Error> {
 		let mut config = load_config_file("config/smsServer.json");
 		//取数组

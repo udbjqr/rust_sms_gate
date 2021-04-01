@@ -3,22 +3,23 @@ use futures::{SinkExt, StreamExt};
 use json::JsonValue;
 use log::{error, info, warn};
 use tokio::{io, time};
-use tokio::net::TcpStream;
+use tokio::net::{TcpSocket, TcpStream};
 use tokio::sync::mpsc;
 use tokio::time::{Duration, timeout};
 use tokio_util::codec::{Decoder, Encoder, Framed};
 
-use crate::entity::{Entity, get_entity};
+use crate::entity::EntityManager;
 use crate::entity::tcp_handle::handle_rev_msg;
 use crate::get_runtime;
-use crate::protocol::{MsgType, Protocol, SmsStatus::{self, AuthError, MessageError, Success}};
+use crate::protocol::{MsgType, Protocol, SmsStatus::{self, MessageError, Success}};
 
 pub struct Channel<T> {
 	///是否经过认证。如果不需要认证,或者认证已经通过。此值为true.
 	need_approve: bool,
 	protocol: T,
-	rx: Option<mpsc::Receiver<JsonValue>>,
-	tx: Option<mpsc::Sender<JsonValue>>,
+	entity_to_channel_priority_rx: Option<mpsc::Receiver<JsonValue>>,
+	entity_to_channel_common_rx: Option<mpsc::Receiver<JsonValue>>,
+	channel_to_entity_tx: Option<mpsc::Sender<JsonValue>>,
 	rx_limit: u32,
 	tx_limit: u32,
 }
@@ -30,20 +31,24 @@ impl<T> Channel<T>
 			need_approve,
 			protocol,
 			// entity,
-			tx: None,
-			rx: None,
+			entity_to_channel_priority_rx: None,
+			entity_to_channel_common_rx: None,
+			channel_to_entity_tx: None,
 			rx_limit: 0,
 			tx_limit: 0,
 		}
 	}
 
 	///开启通道连接动作。这个动作在通道已经连通以后进行
-	pub async fn start_connect(&mut self, stream: TcpStream, user_name: &str, password: &str, version: u8) -> Result<(), io::Error> {
+	pub async fn start_connect(&mut self, id: u32, address: &str, user_name: &str, password: &str, version: &str) -> Result<(), io::Error> {
 		info!("启动Channel.开始连接服务端。");
 
+		let addr = address.parse().unwrap();
+		let socket = TcpSocket::new_v4()?;
+		let stream = socket.connect(addr).await?;
 		let mut framed = Framed::new(stream, self.protocol.clone());
 
-		if let Err(e) = self.connect(&mut framed, user_name, password, version).await {
+		if let Err(e) = self.connect(&mut framed, id, user_name, password, version).await {
 			return Err(e);
 		};
 
@@ -53,19 +58,25 @@ impl<T> Channel<T>
 	}
 
 	///连接服务器的动作
-	async fn connect(&mut self, framed: &mut Framed<TcpStream, T>, user_name: &str, password: &str, version: u8) -> Result<(), io::Error> {
+	async fn connect(&mut self, framed: &mut Framed<TcpStream, T>, id: u32, user_name: &str, password: &str, version: &str) -> Result<(), io::Error> {
 		match self.protocol.e_login_msg(user_name, password, version) {
 			Ok(msg) => framed.send(msg).await?,
 			Err(e) => error!("生成消息出现异常。{}", e),
 		}
 
 		match framed.next().await {
-			Some(Ok(resp)) => {
+			Some(Ok(mut resp)) => {
 				//判断返回类型和返回状态。
 				match (self.protocol.get_type_enum(resp["t"].as_u32().unwrap()),
 				       self.protocol.get_status_enum(resp["status"].as_u32().unwrap())) {
 					(MsgType::ConnectResp, SmsStatus::Success(_)) => {
-						self.handle_login(resp).await;
+						resp["user_id"] = id.into();
+						if let Success(_) = self.handle_login(resp).await {
+							info!("登录成功。");
+						} else {
+							error!("登录后初始化异常。");
+						}
+
 						Ok(())
 					}
 					_ => Err(io::Error::new(io::ErrorKind::PermissionDenied, format!("登录出错。{}", resp)))
@@ -87,9 +98,10 @@ impl<T> Channel<T>
 
 		let mut framed = Framed::new(stream, self.protocol.clone());
 		if self.need_approve {
-			if let Err(_) = self.wait_conn(&mut framed).await {
+			if let Err(e) = self.wait_conn(&mut framed).await {
+				log::error!("记录一下登录的错误。e:{}", e);
 				return;
-			};
+			}
 		}
 
 		self.start_work(&mut framed).await;
@@ -104,8 +116,8 @@ impl<T> Channel<T>
 			return;
 		}
 
-		let tx = self.tx.as_ref().unwrap().clone();
-		let rx = self.rx.as_mut().unwrap();
+		let entity_to_channel_priority_rx = self.entity_to_channel_priority_rx.as_mut().unwrap();
+		let entity_to_channel_common_rx = self.entity_to_channel_common_rx.as_mut().unwrap();
 
 		//上一次执行的时间戳
 		let mut curr_tx: u32 = 0;
@@ -115,6 +127,7 @@ impl<T> Channel<T>
 		tokio::pin!(sleep);
 
 		loop {
+			//TODO 根据当前是否已经发满。发送当前是否可用数据。
 			tokio::select! {
 			  msg = framed.next(), if curr_rx < self.rx_limit => {
 			    curr_rx = curr_rx + 1;
@@ -126,9 +139,7 @@ impl<T> Channel<T>
 									error!("发送回执出现错误, e:{}",e);
 								}
 							}
-
-							let tx = tx.clone();
-							get_runtime().spawn(handle_rev_msg(json, tx));
+							get_runtime().spawn(handle_rev_msg(json));
 						}
 						Some(Err(e)) => {
 							error!("解码出现错误,跳过当前消息。{}", e)
@@ -141,14 +152,33 @@ impl<T> Channel<T>
 						}
 				  }
 				}
-				send = rx.recv(),if curr_tx < self.tx_limit => {
-					match send{
+				send = entity_to_channel_priority_rx.recv(),if curr_tx < self.tx_limit => {
+					match send {
 						Some(send) => {
 							//接收发来的消息。并处理
 							if let Ok(msg) = self.protocol.e_message(&send) {
 								if let Err(e) = framed.send(msg).await {
-									error!("发送回执出现错误, e:{}",e);
-								}else{
+									error!("发送回执出现错误, e:{}", e);
+								} else {
+									// 计数加1
+									curr_tx = curr_tx + 1;
+								}
+							}
+						}
+						None => {
+							warn!("通道已经被关闭。直接退出。");
+							return;
+						}
+					}
+				}
+				send = entity_to_channel_common_rx.recv(),if curr_tx < self.tx_limit => {
+					match send {
+						Some(send) => {
+							//接收发来的消息。并处理
+							if let Ok(msg) = self.protocol.e_message(&send) {
+								if let Err(e) = framed.send(msg).await {
+									error!("发送回执出现错误, e:{}", e);
+								} else {
 									// 计数加1
 									curr_tx = curr_tx + 1;
 								}
@@ -174,10 +204,10 @@ impl<T> Channel<T>
 	async fn tell_entity_disconnect(&mut self) {
 		//发送连接断开消息。
 		let dis = json::object! {
-			t:"disconnect"
+			msg_type:"close"
 		};
 
-		if let Err(e) = self.tx.as_ref().unwrap().send(dis).await {
+		if let Err(e) = self.channel_to_entity_tx.as_ref().unwrap().send(dis).await {
 			error!("发送消息出现异常。e:{}", e)
 		}
 	}
@@ -193,8 +223,10 @@ impl<T> Channel<T>
 						match resp {
 							Success(result) => {
 								info!("登录成功。{}", result);
+								//TODO 根据版本号。调整处理类型 self.protocol = ???
 								let msg = self.protocol.e_login_rep_msg(&Success(result));
 								framed.send(msg).await?;
+
 								Ok(())
 							}
 							//这里只处理登录请求。第一个收到的消息不是登录。直接退出。
@@ -230,21 +262,24 @@ impl<T> Channel<T>
 			Some(id) => id
 		};
 
-		let entity = match get_entity(id).await {
+		let manage = EntityManager::get_entity_manager();
+		let mut entitys = manage.entitys.write().await;
+		let entity = match entitys.get_mut(&id) {
 			None => {
 				error!("user_id找不到对应的entity.");
-				return AuthError;
+				return SmsStatus::AuthError;
 			}
 			Some(en) => en
 		};
 
-		let (resp, rx_limit, tx_limit, rx, tx) = entity.login_attach(longin_info);
+		let (resp, rx_limit, tx_limit, entity_to_channel_priority_rx, entity_to_channel_common_rx, channel_to_entity_tx) = entity.login_attach(longin_info).await;
 		if let Success(v) = resp {
 			// 设置相关的参数
 			self.rx_limit = rx_limit;
 			self.tx_limit = tx_limit;
-			self.rx = rx;
-			self.tx = tx;
+			self.entity_to_channel_priority_rx = entity_to_channel_priority_rx;
+			self.entity_to_channel_common_rx = entity_to_channel_common_rx;
+			self.channel_to_entity_tx = channel_to_entity_tx;
 
 			Success(v)
 		} else {
@@ -252,6 +287,3 @@ impl<T> Channel<T>
 		}
 	}
 }
-
-
-
