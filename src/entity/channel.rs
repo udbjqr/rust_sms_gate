@@ -14,6 +14,7 @@ use crate::get_runtime;
 use crate::protocol::{MsgType, Protocol, SmsStatus::{self, MessageError, Success}};
 
 pub struct Channel<T> {
+	id: usize,
 	///是否经过认证。如果不需要认证,或者认证已经通过。此值为true.
 	need_approve: bool,
 	protocol: T,
@@ -28,6 +29,7 @@ impl<T> Channel<T>
 	where T: Protocol + Decoder<Item=JsonValue, Error=io::Error> + Encoder<BytesMut, Error=io::Error> + Clone + std::marker::Send {
 	pub fn new(protocol: T, need_approve: bool) -> Channel<T> {
 		Channel {
+			id: 0,
 			need_approve,
 			protocol,
 			// entity,
@@ -127,7 +129,7 @@ impl<T> Channel<T>
 		tokio::pin!(sleep);
 
 		loop {
-			//TODO 根据当前是否已经发满。发送当前是否可用数据。
+			//根据当前是否已经发满。发送当前是否可用数据。
 			tokio::select! {
 			  msg = framed.next(), if curr_rx < self.rx_limit => {
 			    curr_rx = curr_rx + 1;
@@ -204,7 +206,8 @@ impl<T> Channel<T>
 	async fn tell_entity_disconnect(&mut self) {
 		//发送连接断开消息。
 		let dis = json::object! {
-			msg_type:"close"
+			msg_type:"close",
+			id:self.id,
 		};
 
 		if let Err(e) = self.channel_to_entity_tx.as_ref().unwrap().send(dis).await {
@@ -272,9 +275,10 @@ impl<T> Channel<T>
 			Some(en) => en
 		};
 
-		let (resp, rx_limit, tx_limit, entity_to_channel_priority_rx, entity_to_channel_common_rx, channel_to_entity_tx) = entity.login_attach(longin_info).await;
+		let (id, resp, rx_limit, tx_limit, entity_to_channel_priority_rx, entity_to_channel_common_rx, channel_to_entity_tx) = entity.login_attach(longin_info).await;
 		if let Success(v) = resp {
 			// 设置相关的参数
+			self.id = id;
 			self.rx_limit = rx_limit;
 			self.tx_limit = tx_limit;
 			self.entity_to_channel_priority_rx = entity_to_channel_priority_rx;

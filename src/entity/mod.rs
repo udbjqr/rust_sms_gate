@@ -26,10 +26,9 @@ mod entity_running;
 pub trait Entity: Send + Sync + Debug {
 	///进行登录检验操作。如果成功。将通道附加至实体
 	/// 返回值依次为:
-	/// 登录状态,rx_limit,tx_limit,entity_to_channel_priority_tx,entity_to_channel_common_tx,channel_to_entity_tx
-	async fn login_attach(&mut self, json: JsonValue) -> (SmsStatus<JsonValue>, u32, u32, Option<mpsc::Receiver<JsonValue>>,Option<mpsc::Receiver<JsonValue>>, Option<mpsc::Sender<JsonValue>>);
+	/// id,登录状态,rx_limit,tx_limit,entity_to_channel_priority_tx,entity_to_channel_common_tx,channel_to_entity_tx
+	async fn login_attach(&mut self, json: JsonValue) -> (usize,SmsStatus<JsonValue>, u32, u32, Option<mpsc::Receiver<JsonValue>>,Option<mpsc::Receiver<JsonValue>>, Option<mpsc::Sender<JsonValue>>);
 
-	async fn send_message(&self, json: JsonValue);
 	fn get_id(&self) -> u32;
 	fn get_channels(&self) -> Arc<RwLock<Vec<ChannelStates>>>;
 }

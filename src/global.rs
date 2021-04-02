@@ -21,8 +21,18 @@ pub static TOPIC_PASSAGE_REMOVE: &'static str = "passage.remove";
 lazy_static! {
 	static ref CONFIG: RwLock<JsonValue> = RwLock::new(load_config_file("config/setting.json"));
 	static ref SEQUENCE: AtomicU32 = AtomicU32::new(rand::random());
-	static ref MESSAGE_SEND: HashMap<&'static str,KafkaMessageProducer> = HashMap::new();
 	// static ref SERVERS_CONFIG: RwLock<JsonValue> = RwLock::new(load_config_file("smsServer.json"));
+}
+
+static mut MESSAGE_SENDER: Option<Arc<KafkaMessageProducer>> = None;
+pub fn message_sender() -> Arc<KafkaMessageProducer> {
+	unsafe {
+		MESSAGE_SENDER.get_or_insert_with(|| {
+			let config = load_config_file("config/message_receiver.json");
+
+			Arc::new(KafkaMessageProducer::new(config["bootstrap"]["servers"].as_str().unwrap()))
+		}).clone()
+	}
 }
 
 pub fn load_config_file(file_name: &str) -> JsonValue {
@@ -37,6 +47,7 @@ pub async fn get_config_or<T>(name: &str, default: T) -> T
 	let config = CONFIG.read().await;
 
 	let result: T = config[name].dump().parse().unwrap_or(default);
+
 	result
 }
 

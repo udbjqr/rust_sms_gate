@@ -133,13 +133,13 @@ impl ServerEntity {
 
 #[async_trait]
 impl Entity for ServerEntity {
-	async fn login_attach(&mut self, _json: JsonValue) -> (SmsStatus<JsonValue>, u32, u32, Option<Receiver<JsonValue>>, Option<Receiver<JsonValue>>, Option<Sender<JsonValue>>) {
+	async fn login_attach(&mut self, json: JsonValue) -> (usize, SmsStatus<JsonValue>, u32, u32, Option<Receiver<JsonValue>>, Option<Receiver<JsonValue>>, Option<Sender<JsonValue>>) {
 		let mut channels = self.channels.write().await;
 		let index = channels.iter().rposition(|i| i.is_active == false);
 
 		if index.is_none() {
 			log::warn!("当前已经满。不再继续增加。entity_id:{}", self.id);
-			return (SmsStatus::OtherError, 0, 0, None, None, None);
+			return (0, SmsStatus::OtherError, 0, 0, None, None, None);
 		}
 
 		let index = index.unwrap();
@@ -165,12 +165,7 @@ impl Entity for ServerEntity {
 			log::error!("发送消息出现异常。e:{}", e);
 		}
 
-		(SmsStatus::Success(json), self.read_limit, self.write_limit, Some(entity_to_channel_priority_rx), Some(entity_to_channel_common_rx), Some(channel_to_entity_tx))
-	}
-
-	async fn send_message(&self, _json: JsonValue) {
-		//TODO 收到需要发送的消息的处理。向通道转发消息
-		unimplemented!()
+		(index, SmsStatus::Success(json), self.read_limit, self.write_limit, Some(entity_to_channel_priority_rx), Some(entity_to_channel_common_rx), Some(channel_to_entity_tx))
 	}
 
 	fn get_id(&self) -> u32 {
