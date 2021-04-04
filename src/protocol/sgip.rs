@@ -95,28 +95,28 @@ pub struct Sgip {
 
 
 impl Protocol for Sgip {
-	fn e_receipt(&self, json: &JsonValue) -> Option<BytesMut> {
+	fn encode_receipt(&self, json: &JsonValue) -> Option<BytesMut> {
 		unimplemented!()
 	}
 
-	fn e_submit_resp(&self, json: &JsonValue) -> BytesMut {
+	fn encode_submit_resp(&self, json: &JsonValue) -> BytesMut {
 		unimplemented!()
 	}
 
-	fn e_deliver_resp(&self, json: &JsonValue) -> BytesMut {
+	fn encode_deliver_resp(&self, json: &JsonValue) -> BytesMut {
 		unimplemented!()
 	}
 
-	fn e_message(&self, json: &JsonValue) -> Result<BytesMut, Error> {
+	fn encode_from_entity_message(&self, json: &JsonValue) -> Result<BytesMut, Error> {
 		unimplemented!()
 	}
 
 
-	fn e_login_msg(&self, sp_id: &str, password: &str, version: &str) -> Result<BytesMut, Error> {
+	fn encode_login_msg(&self, sp_id: &str, password: &str, version: &str) -> Result<BytesMut, Error> {
 		unimplemented!()
 	}
 
-	fn e_login_rep_msg(&self, json: &SmsStatus<JsonValue>) -> BytesMut {
+	fn encode_login_rep(&self, json: &SmsStatus<JsonValue>) -> BytesMut {
 		unimplemented!()
 	}
 
@@ -132,11 +132,11 @@ impl Protocol for Sgip {
 		unimplemented!()
 	}
 
-	fn get_status_id(&self, t: SmsStatus<JsonValue>) -> u32 {
+	fn get_status_id<T>(&self, t: &SmsStatus<T>) -> u32 {
 		unimplemented!()
 	}
 
-	fn get_status_enum(&self, v: u32) -> SmsStatus<JsonValue> {
+	fn get_status_enum<T>(&self, v: u32, json: T) -> SmsStatus<T> {
 		unimplemented!()
 	}
 }

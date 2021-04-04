@@ -31,3 +31,7 @@ path= "src/test_main.rs"
 name="sms_gate"
 path= "src/main.rs"
 
+
+[[bin]]
+name="sms_gate_test"
+path= "src/main_test.rs"

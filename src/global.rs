@@ -18,13 +18,17 @@ pub static TOPIC_PASSAGE_MODIFY: &'static str = "passage.modify";
 pub static TOPIC_PASSAGE_ADD: &'static str = "passage.add";
 pub static TOPIC_PASSAGE_REMOVE: &'static str = "passage.remove";
 
+
 lazy_static! {
 	static ref CONFIG: RwLock<JsonValue> = RwLock::new(load_config_file("config/setting.json"));
 	static ref SEQUENCE: AtomicU32 = AtomicU32::new(rand::random());
+	pub static ref FILL_ZERO: Vec<u8> = vec![0;200];
+
 	// static ref SERVERS_CONFIG: RwLock<JsonValue> = RwLock::new(load_config_file("smsServer.json"));
 }
 
 static mut MESSAGE_SENDER: Option<Arc<KafkaMessageProducer>> = None;
+
 pub fn message_sender() -> Arc<KafkaMessageProducer> {
 	unsafe {
 		MESSAGE_SENDER.get_or_insert_with(|| {
