@@ -95,19 +95,11 @@ pub struct Sgip {
 
 
 impl Protocol for Sgip {
-	fn encode_receipt(&self, json: &JsonValue) -> Option<BytesMut> {
-		unimplemented!()
+	fn encode_receipt(&self,  status: SmsStatus<()>, json: &mut JsonValue) -> Option<BytesMut> {
+		todo!()
 	}
 
-	fn encode_submit_resp(&self, json: &JsonValue) -> BytesMut {
-		unimplemented!()
-	}
-
-	fn encode_deliver_resp(&self, json: &JsonValue) -> BytesMut {
-		unimplemented!()
-	}
-
-	fn encode_from_entity_message(&self, json: &JsonValue) -> Result<BytesMut, Error> {
+	fn encode_from_entity_message(&self, json: &JsonValue) -> Result<(BytesMut,Vec<u32>), Error> {
 		unimplemented!()
 	}
 

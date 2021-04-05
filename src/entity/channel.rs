@@ -13,6 +13,7 @@ use crate::entity::tcp_handle::handle_rev_msg;
 use crate::get_runtime;
 use crate::protocol::{MsgType, Protocol, SmsStatus::{self, MessageError, Success}};
 use crate::protocol::names::{MSG_TYPE, STATUS, USER_ID};
+use std::time::{Instant};
 
 pub struct Channel<T> {
 	id: usize,
@@ -70,7 +71,7 @@ impl<T> Channel<T>
 		match framed.next().await {
 			Some(Ok(mut resp)) => {
 				resp[USER_ID] = id.into();
-				log::info!("收到登录返回信息:{}",resp);
+				log::info!("收到登录返回信息:{}", resp);
 
 				//判断返回类型和返回状态。
 				match (self.protocol.get_type_enum(resp[MSG_TYPE].as_u32().unwrap()),
@@ -124,27 +125,60 @@ impl<T> Channel<T>
 		let entity_to_channel_priority_rx = self.entity_to_channel_priority_rx.as_mut().unwrap();
 		let entity_to_channel_common_rx = self.entity_to_channel_common_rx.as_mut().unwrap();
 
-		//上一次执行的时间戳
-		let mut curr_tx: u32 = 0;
-		let mut curr_rx: u32 = 0;
-
 		let sleep = time::sleep(Duration::from_millis(1000));
 		tokio::pin!(sleep);
 
+		//上一次执行的时间戳
+		let mut curr_tx: u32 = 0;
+		let mut curr_rx: u32 = 0;
+		let mut idle_count : u16 = 0;
+
+		let mut timestamp = Instant::now();
+		let one_secs = Duration::from_secs(1);
 		loop {
+			//一个时间窗口过去,清除数据
+			if timestamp.elapsed() > one_secs {
+				curr_tx = 0;
+				curr_rx = 0;
+				timestamp = Instant::now();
+			}
+
+			//当空闲超过时间后发送心跳
+			if idle_count > 30 {
+				let active_test = json::object!{
+					msg_type : self.protocol.get_type_id(MsgType::ActiveTest)
+				};
+
+				if let Err(e) = framed.send(resp).await{
+					error!("发送回执出现错误, e:{}",e);
+				}
+
+				idle_count = 0;
+			}
+
 			//根据当前是否已经发满。发送当前是否可用数据。
 			tokio::select! {
-			  msg = framed.next(), if curr_rx < self.rx_limit => {
-			    curr_rx = curr_rx + 1;
+			  msg = framed.next() => {
+					idle_count = 0;
 				  match msg {
-				    Some(Ok(json)) => {
-							// 发送回执.只有需要的才发送
-							if let Some(resp) = self.protocol.encode_receipt(&json) {
-								if let Err(e) = framed.send(resp).await{
-									error!("发送回执出现错误, e:{}",e);
+				    Some(Ok(mut json)) => {
+							// 是否超出流量都发送回执.但走出流量不处理.
+              if curr_rx > self.rx_limit {
+								if let Some(resp) = self.protocol.encode_receipt(SmsStatus::TrafficRestrictions(()),&mut json) {
+									//当消息需要需要返回的才进行记录.即: 当消息为返回消息时不进行记录.
+							    curr_rx = curr_rx + 1;
+									if let Err(e) = framed.send(resp).await{
+										error!("发送回执出现错误, e:{}",e);
+									}
 								}
+							} else {
+								if let Some(resp) = self.protocol.encode_receipt(SmsStatus::Success(()),&mut json) {
+									if let Err(e) = framed.send(resp).await{
+										error!("发送回执出现错误, e:{}",e);
+									}
+								}
+								get_runtime().spawn(handle_rev_msg(json));
 							}
-							get_runtime().spawn(handle_rev_msg(json));
 						}
 						Some(Err(e)) => {
 							error!("解码出现错误,跳过当前消息。{}", e)
@@ -158,15 +192,17 @@ impl<T> Channel<T>
 				  }
 				}
 				send = entity_to_channel_priority_rx.recv(),if curr_tx < self.tx_limit => {
+					idle_count = 0;
 					match send {
 						Some(send) => {
 							//接收发来的消息。并处理
-							if let Ok(msg) = self.protocol.encode_from_entity_message(&send) {
+							if let Ok((msg,_seq_ids)) = self.protocol.encode_from_entity_message(&send) {
 								if let Err(e) = framed.send(msg).await {
 									error!("发送回执出现错误, e:{}", e);
 								} else {
 									// 计数加1
 									curr_tx = curr_tx + 1;
+									//TODO 发送以后要等回复.使用seq_ids等待回复...是不是要把当前消息发送回实体进行等待.
 								}
 							}
 						}
@@ -177,15 +213,17 @@ impl<T> Channel<T>
 					}
 				}
 				send = entity_to_channel_common_rx.recv(),if curr_tx < self.tx_limit => {
+					idle_count = 0;
 					match send {
 						Some(send) => {
 							//接收发来的消息。并处理
-							if let Ok(msg) = self.protocol.encode_from_entity_message(&send) {
+							if let Ok((msg,_seq_ids)) = self.protocol.encode_from_entity_message(&send) {
 								if let Err(e) = framed.send(msg).await {
 									error!("发送回执出现错误, e:{}", e);
 								} else {
-									// 计数加1
+									// 成功计数加1
 									curr_tx = curr_tx + 1;
+									//TODO 发送以后要等回复.使用seq_ids等待回复...是不是要把当前消息发送回实体进行等待.
 								}
 							}
 						}
@@ -195,11 +233,10 @@ impl<T> Channel<T>
 						}
 					}
 				}
-				//这里是当上面两个都未收启用时处理,也有可能随时执行到这里
-				//当时间窗口过去,重新计数
 				_ = &mut sleep => {
-					curr_tx = 0;
-					curr_rx = 0;
+					//这里就是用来当全部都没有动作的时间打开再次进行循环.
+					//空闲记数
+					idle_count = idle_count + 1;
 				}
 			}
 		}

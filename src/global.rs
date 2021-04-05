@@ -23,7 +23,7 @@ lazy_static! {
 	static ref CONFIG: RwLock<JsonValue> = RwLock::new(load_config_file("config/setting.json"));
 	static ref SEQUENCE: AtomicU32 = AtomicU32::new(rand::random());
 	pub static ref FILL_ZERO: Vec<u8> = vec![0;200];
-
+	pub static ref ISMG_ID: u32 = rand::random::<u32>() % 1000000;
 	// static ref SERVERS_CONFIG: RwLock<JsonValue> = RwLock::new(load_config_file("smsServer.json"));
 }
 
