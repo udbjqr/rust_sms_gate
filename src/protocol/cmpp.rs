@@ -9,7 +9,7 @@ use crate::protocol::msg_type::MsgType::{Connect, SubmitResp};
 use tokio::io::Error;
 use crate::global::{get_sequence_id, FILL_ZERO};
 use crate::protocol::msg_type::SmsStatus;
-use crate::protocol::names::{SEQ_ID, AUTHENTICATOR, VERSION, STATUS, MSG_TYPE, USER_ID, MSG_CONTENT, MSG_ID, SERVICE_ID, TP_UDHI, SP_ID, VALID_TIME, AT_TIME, SRC_ID, MSG_FMT, DEST_IDS, RESULT, DEST_ID, STAT, SUBMIT_TIME, DONE_TIME, SMSC_SEQUENCE, IS_REPORT};
+use crate::protocol::names::{SEQ_ID, AUTHENTICATOR, VERSION, STATUS, MSG_TYPE, USER_ID, MSG_CONTENT, MSG_ID, SERVICE_ID, TP_UDHI, SP_ID, VALID_TIME, AT_TIME, SRC_ID, MSG_FMT, DEST_IDS, RESULT, DEST_ID, STAT, SUBMIT_TIME, DONE_TIME, SMSC_SEQUENCE, IS_REPORT, MSG_TYPE_STR};
 use encoding::all::UTF_16BE;
 use encoding::{Encoding, EncoderTrap};
 
@@ -26,7 +26,7 @@ impl Protocol for Cmpp48 {
 			MsgType::Deliver => self.encode_deliver_resp(status, json),
 			MsgType::ActiveTest => self.encode_active_test_resp(status, json),
 			_ => {
-				log::error!("未生成的返回对象.json:{}",json);
+				log::error!("未生成的返回对象.json:{}", json);
 				None
 			}
 		}
@@ -118,16 +118,15 @@ impl Protocol for Cmpp48 {
 		//拿掉seq
 		let seq = buf.get_u32();
 
-		let msg = match self.get_type_enum(tp) {
+		let msg_type = self.get_type_enum(tp);
+		let mut msg = match msg_type {
 			MsgType::Submit => self.decode_submit(buf, seq, tp)?,
 			MsgType::DeliverResp | MsgType::SubmitResp => self.decode_submit_or_deliver_resp(buf, seq, tp)?,
 			MsgType::Deliver => self.decode_deliver(buf, seq, tp)?,
-			MsgType::ActiveTest => self.decode_nobody(buf, seq, tp)?,
-			MsgType::ActiveTestResp => self.decode_nobody(buf, seq, tp)?,
+			MsgType::ActiveTest | MsgType::ActiveTestResp => self.decode_nobody(buf, seq, tp)?,
 			MsgType::Connect => self.decode_connect(buf, seq, tp)?,
 			MsgType::ConnectResp => self.decode_connect_resp(buf, seq, tp)?,
-			MsgType::Terminate => self.decode_nobody(buf, seq, tp)?,
-			MsgType::TerminateResp => self.decode_nobody(buf, seq, tp)?,
+			MsgType::Terminate | MsgType::TerminateResp => self.decode_nobody(buf, seq, tp)?,
 			MsgType::Query |
 			MsgType::QueryResp |
 			MsgType::Cancel |
@@ -156,6 +155,10 @@ impl Protocol for Cmpp48 {
 				return Err(io::Error::new(io::ErrorKind::Other, "还未实现")),
 			// _ => return Err(io::Error::new(io::ErrorKind::NotFound, "type没值,或者无法转换")),
 		};
+
+		//这句是把对应的消息转成字符串用来处理。因为id每一个协议不一样。而且枚举在json结构里面又不支持。
+		let msg_type_str: &str = msg_type.into();
+		msg[MSG_TYPE_STR] = msg_type_str.into();
 
 		Ok(Some(msg))
 	}
@@ -358,6 +361,8 @@ impl Cmpp48 {
 	}
 
 	fn encode_active_test(&self, _json: &JsonValue) -> Result<(BytesMut, Vec<u32>), Error> {
+		let mut dst = BytesMut::with_capacity(12);
+
 		dst.put_u32(12);
 		dst.put_u32(self.get_type_id(MsgType::ActiveTest));
 		let mut seq_ids = Vec::with_capacity(1);
@@ -787,10 +792,10 @@ impl Cmpp48 {
 			buf.advance(1); //Msg_Length 1
 			json[IS_REPORT] = true.into(); //状态报告增加.
 			json[MSG_ID] = buf.get_u64().into(); // Msg_Id
-			json[STAT] = load_utf8_string(buf,7).into(); // Stat
-			json[SUBMIT_TIME] = load_utf8_string(buf,10).into(); // Submit_time
-			json[DONE_TIME] = load_utf8_string(buf,10).into(); // Done_time
-			json[SRC_ID] = load_utf8_string(buf,32).into(); // dest_terminal_id
+			json[STAT] = load_utf8_string(buf, 7).into(); // Stat
+			json[SUBMIT_TIME] = load_utf8_string(buf, 10).into(); // Submit_time
+			json[DONE_TIME] = load_utf8_string(buf, 10).into(); // Done_time
+			json[SRC_ID] = load_utf8_string(buf, 32).into(); // dest_terminal_id
 		}
 
 		Ok(json)

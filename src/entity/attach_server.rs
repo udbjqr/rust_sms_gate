@@ -74,8 +74,8 @@ impl ServerEntity {
 	pub async fn start(&mut self) -> mpsc::Sender<JsonValue> {
 		log::debug!("开始进行实体的启动操作。启动消息接收。id:{}", self.id);
 
-		let (manage_to_entity_tx, manage_to_entity_rx) = mpsc::channel(0xffffffff);
-		let (channel_to_entity_tx, channel_to_entity_rx) = mpsc::channel(0xff);
+		let (manage_to_entity_tx, manage_to_entity_rx) = mpsc::channel(0xFFFFFFFF);
+		let (channel_to_entity_tx, channel_to_entity_rx) = mpsc::channel(0xFFFFFFFF);
 
 		//这里开始自己的消息处理
 		get_runtime().spawn(start_entity(manage_to_entity_rx, channel_to_entity_rx, self.channels.clone()));

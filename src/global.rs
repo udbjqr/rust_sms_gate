@@ -17,7 +17,16 @@ pub static TOPIC_ACCOUNT_REMOVE: &'static str = "account.remove";
 pub static TOPIC_PASSAGE_MODIFY: &'static str = "passage.modify";
 pub static TOPIC_PASSAGE_ADD: &'static str = "passage.add";
 pub static TOPIC_PASSAGE_REMOVE: &'static str = "passage.remove";
+pub static TOPIC_TO_B_SUBMIT: &'static str = "toB.submit";
+pub static TOPIC_TO_B_SUBMIT_RESP: &'static str = "toB.submit.response";
+pub static TOPIC_TO_B_DELIVER: &'static str = "toB.deliver";
+pub static TOPIC_TO_B_DELIVER_RESP: &'static str = "toB.deliver.response";
+pub static TOPIC_TO_B_REPORT: &'static str = "toB.report";
+pub static TOPIC_TO_B_REPORT_RESP: &'static str = "toB.report.response";
 
+pub static TOPIC_FROM_B_SUBMIT: &'static str = "send.submit";
+pub static TOPIC_FROM_B_DELIVER: &'static str = "send.deliver";
+pub static TOPIC_FROM_B_REPORT: &'static str = "send.report";
 
 lazy_static! {
 	static ref CONFIG: RwLock<JsonValue> = RwLock::new(load_config_file("config/setting.json"));

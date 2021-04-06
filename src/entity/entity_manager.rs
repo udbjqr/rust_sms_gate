@@ -12,7 +12,8 @@ use tokio::sync::{mpsc, RwLock};
 use crate::entity::{CustomEntity, Entity};
 use crate::entity::attach_server::ServerEntity;
 use crate::get_runtime;
-use crate::global::load_config_file;
+use crate::global::{load_config_file, TOPIC_FROM_B_SUBMIT, TOPIC_FROM_B_DELIVER, TOPIC_FROM_B_REPORT};
+use crate::protocol::names::{MANAGER_TYPE};
 
 ///实体的管理对象。
 /// 负责处理消息队列送过来的实体的开启、关闭等操作
@@ -41,6 +42,7 @@ impl EntityManager {
 			}).clone()
 		}
 	}
+
 	///启动接收消息服务。
 	pub fn start(&mut self) -> Result<(), io::Error> {
 		if self.is_active {
@@ -59,9 +61,9 @@ impl EntityManager {
 			"passage.modify",
 			"passage.add",
 			"passage.remove",
-			"sms.send.wait",
-			"sms.reportRequest",
-			"sms.deliverRequest",
+			TOPIC_FROM_B_SUBMIT,
+			TOPIC_FROM_B_DELIVER,
+			TOPIC_FROM_B_REPORT,
 		];
 
 		//定义来自于服务器的消息队列
@@ -97,7 +99,6 @@ impl EntityManager {
 	}
 }
 
-
 struct RunContext {
 	give_entity_tx: mpsc::Sender<JsonValue>,
 	senders: HashMap<u32, mpsc::Sender<JsonValue>>,
@@ -120,10 +121,10 @@ pub async fn start_server(from_servers: StreamConsumer) {
 						return;
 					}
 					Some(msg) => {
-						if let Some(msg_type) = msg["msg_type"].as_str() {
-							handle_from_entity_msg(msg_type,&msg,&mut context).await;
+						if let Some(manager_type) = msg[MANAGER_TYPE].as_str() {
+							handle_from_entity_msg(manager_type, &msg, &mut context).await;
 						} else {
-							log::error!("接收的消息里面不包含msg_type.. msg:{}", msg);
+							log::error!("接收的消息里面不包含manager_type.. msg:{}", msg);
 						}
 					}
 				}
@@ -167,7 +168,8 @@ pub async fn start_server(from_servers: StreamConsumer) {
 
 
 ///处理从实体过来的消息。
-async fn handle_from_entity_msg(msg_type: &str, msg: &JsonValue, context: &mut RunContext) {
+async fn handle_from_entity_msg(manager_type: &str, msg: &JsonValue, context: &mut RunContext) {
+	let close_json = json::object! {manager_type:"close"};
 	let id = match msg["id"].as_u32() {
 		None => {
 			log::error!("未在消息里面找到id。msg:{}", msg);
@@ -184,22 +186,24 @@ async fn handle_from_entity_msg(msg_type: &str, msg: &JsonValue, context: &mut R
 		Some(v) => v,
 	};
 
-	match msg_type {
-		"close_entity" => {
-			if let Err(e) = entity_sender.send(json::parse(r#"{msg_type:"close"}"#).unwrap()).await {
+	match manager_type {
+		"close" => {
+			if let Err(e) = entity_sender.send(close_json.clone()).await {
 				log::error!("发送消息出现异常。对端可能已经关闭。e:{}", e);
 			}
 			context.senders.remove(&id);
 		}
 		//TODO 继续收到entity来的消息
 		_ => {
-			log::error!("收到一个未知的msg_type.不处理。跳过。msg:{}", msg);
+			log::error!("收到一个未知的manager_type.不处理。跳过。msg:{}", msg);
 		}
 	}
 }
 
 ///处理从消息队列过来的实体相关的消息。
 async fn handle_queue_msg(topic: &str, json: JsonValue, context: &mut RunContext) {
+	let close_json = json::parse(r#"{manager_type:"close"}"#).unwrap();
+
 	let id = match json["id"].as_u32() {
 		None => {
 			error!("接收的消息未指定id。直接放弃。msg:{}", json);
@@ -209,9 +213,8 @@ async fn handle_queue_msg(topic: &str, json: JsonValue, context: &mut RunContext
 	};
 
 	let entity_manager = EntityManager::get_entity_manager();
-
 	match topic {
-		"sms.send.wait" | "sms.reportRequest" | "sms.deliverRequest" => {
+		"send.submit" | "send.deliver" | "send.report" => {
 			if let Some(sender) = context.senders.get(&id) {
 				if let Err(e) = sender.send(json).await {
 					log::error!("发送出现异常.e:{}", e);
@@ -226,7 +229,7 @@ async fn handle_queue_msg(topic: &str, json: JsonValue, context: &mut RunContext
 			let mut entitys = entity_manager.entitys.write().await;
 			if let Some(_) = entitys.get(&id) {
 				if let Some(sender) = context.senders.remove(&id) {
-					if let Err(e) = sender.send(json::parse(r#"{msg_type:"close"}"#).unwrap()).await {
+					if let Err(e) = sender.send(close_json.clone()).await {
 						log::warn!("向entity发送关闭操作失败。e:{}", e);
 					}
 				} else {
@@ -285,7 +288,7 @@ async fn handle_queue_msg(topic: &str, json: JsonValue, context: &mut RunContext
 			let mut entitys = entity_manager.entitys.write().await;
 			if let Some(_) = entitys.get(&id) {
 				if let Some(sender) = context.senders.remove(&id) {
-					if let Err(e) = sender.send(json::parse(r#"{msg_type:"close"}"#).unwrap()).await {
+					if let Err(e) = sender.send(close_json.clone()).await {
 						log::warn!("向entity发送关闭操作失败。e:{}", e);
 					}
 				} else {

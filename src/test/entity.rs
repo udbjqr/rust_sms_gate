@@ -11,6 +11,14 @@ use chrono::{Local, Datelike, Timelike};
 use std::str::FromStr;
 
 #[test]
+fn test_json_array() {
+	let json = json::object! {arr:["123","456","789"]};
+
+	println!("{}",json["arr"][0].as_str().unwrap_or("没有东西呀"));
+}
+
+
+#[test]
 fn test_div() {
 	let date = Local::now();
 	dbg!(date.month(),date.day(),date.hour(),date.minute(),date.second(),*ISMG_ID,get_sequence_id(1)& 0xff);

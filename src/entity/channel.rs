@@ -15,6 +15,7 @@ use crate::protocol::{MsgType, Protocol, SmsStatus::{self, MessageError, Success
 use crate::protocol::names::{MSG_TYPE, STATUS, USER_ID};
 use std::time::{Instant};
 
+#[derive(Debug)]
 pub struct Channel<T> {
 	id: usize,
 	///是否经过认证。如果不需要认证,或者认证已经通过。此值为true.
@@ -28,7 +29,7 @@ pub struct Channel<T> {
 }
 
 impl<T> Channel<T>
-	where T: Protocol + Decoder<Item=JsonValue, Error=io::Error> + Encoder<BytesMut, Error=io::Error> + Clone + std::marker::Send {
+	where T: Protocol + Decoder<Item=JsonValue, Error=io::Error> + Encoder<BytesMut, Error=io::Error> + Clone + std::marker::Send + std::fmt::Debug {
 	pub fn new(protocol: T, need_approve: bool) -> Channel<T> {
 		Channel {
 			id: 0,
@@ -117,6 +118,17 @@ impl<T> Channel<T>
 	/// 这里应该已经处理完接收和发送的消息。
 	/// 送到这里的都是单个短信的消息
 	async fn start_work(&mut self, framed: &mut Framed<TcpStream, T>) {
+		let active_test = json::object! {
+					msg_type : self.protocol.get_type_id(MsgType::ActiveTest)
+		};
+
+		let channel_to_entity_tx = if self.channel_to_entity_tx.is_some() {
+			self.channel_to_entity_tx.as_ref().unwrap()
+		} else {
+			log::error!("没有向实体发送的通道。直接退出。{:?}", self);
+			return;
+		};
+
 		if !self.need_approve {
 			error!("还未进行认证。退出");
 			return;
@@ -131,10 +143,11 @@ impl<T> Channel<T>
 		//上一次执行的时间戳
 		let mut curr_tx: u32 = 0;
 		let mut curr_rx: u32 = 0;
-		let mut idle_count : u16 = 0;
+		let mut idle_count: u16 = 0;
 
 		let mut timestamp = Instant::now();
 		let one_secs = Duration::from_secs(1);
+
 		loop {
 			//一个时间窗口过去,清除数据
 			if timestamp.elapsed() > one_secs {
@@ -145,12 +158,10 @@ impl<T> Channel<T>
 
 			//当空闲超过时间后发送心跳
 			if idle_count > 30 {
-				let active_test = json::object!{
-					msg_type : self.protocol.get_type_id(MsgType::ActiveTest)
-				};
-
-				if let Err(e) = framed.send(resp).await{
-					error!("发送回执出现错误, e:{}",e);
+				if let Ok((send_msg, _)) = self.protocol.encode_from_entity_message(&active_test) {
+					if let Err(e) = framed.send(send_msg).await {
+						error!("发送回执出现错误, e:{}", e);
+					}
 				}
 
 				idle_count = 0;
@@ -162,26 +173,33 @@ impl<T> Channel<T>
 					idle_count = 0;
 				  match msg {
 				    Some(Ok(mut json)) => {
-							// 是否超出流量都发送回执.但走出流量不处理.
-              if curr_rx > self.rx_limit {
+							// 超出返回流量超出
+              if curr_rx <= self.rx_limit {
+								//当收到的不是回执才回返回Some.
+								if let Some(resp) = self.protocol.encode_receipt(SmsStatus::Success(()),&mut json) {
+									if let Err(e) = framed.send(resp).await{
+										error!("发送回执出现错误, e:{}", e);
+									}
+									get_runtime().spawn(handle_rev_msg(json));
+								} else {
+									//把回执发回给实体处理回执
+									if let Err(e) = channel_to_entity_tx.send(json).await {
+										log::error!("向实体发送消息出现异常, e:{}", e);
+										return;
+									}
+								}
+							} else {
 								if let Some(resp) = self.protocol.encode_receipt(SmsStatus::TrafficRestrictions(()),&mut json) {
-									//当消息需要需要返回的才进行记录.即: 当消息为返回消息时不进行记录.
+									//当消息需要需要返回的才记录接收数量.即: 当消息为返回消息时不进行记录.
 							    curr_rx = curr_rx + 1;
 									if let Err(e) = framed.send(resp).await{
 										error!("发送回执出现错误, e:{}",e);
 									}
 								}
-							} else {
-								if let Some(resp) = self.protocol.encode_receipt(SmsStatus::Success(()),&mut json) {
-									if let Err(e) = framed.send(resp).await{
-										error!("发送回执出现错误, e:{}",e);
-									}
-								}
-								get_runtime().spawn(handle_rev_msg(json));
 							}
 						}
 						Some(Err(e)) => {
-							error!("解码出现错误,跳过当前消息。{}", e)
+							error!("解码出现错误,跳过当前消息。{}", e);
 						}
 						None => {
 							info!("当前连接已经断开。。。。");
@@ -202,7 +220,11 @@ impl<T> Channel<T>
 								} else {
 									// 计数加1
 									curr_tx = curr_tx + 1;
-									//TODO 发送以后要等回复.使用seq_ids等待回复...是不是要把当前消息发送回实体进行等待.
+									//把收到的消息发送给实体
+									if let Err(e) = channel_to_entity_tx.send(send).await {
+										log::error!("向实体发送消息出现异常, e:{}", e);
+										return;
+									}
 								}
 							}
 						}
@@ -223,7 +245,11 @@ impl<T> Channel<T>
 								} else {
 									// 成功计数加1
 									curr_tx = curr_tx + 1;
-									//TODO 发送以后要等回复.使用seq_ids等待回复...是不是要把当前消息发送回实体进行等待.
+									//把收到的消息发送给实体
+									if let Err(e) = channel_to_entity_tx.send(send).await {
+										log::error!("向实体发送消息出现异常, e:{}", e);
+										return;
+									}
 								}
 							}
 						}
@@ -241,7 +267,6 @@ impl<T> Channel<T>
 			}
 		}
 	}
-
 
 	async fn tell_entity_disconnect(&mut self) {
 		//发送连接断开消息。
