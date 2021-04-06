@@ -5,6 +5,7 @@ pub static AUTHENTICATOR: &'static str = "authenticator";
 pub static VERSION: &'static str = "version";
 pub static MSG_TYPE: &'static str = "msg_type";
 pub static MSG_TYPE_STR: &'static str = "msg_type_str";
+pub static RECEIVE_TIME: &'static str = "receive_time";
 pub static WAIT_RECEIPT: &'static str = "wait_receipt";
 pub static STATUS: &'static str = "status";
 pub static USER_ID: &'static str = "user_id";

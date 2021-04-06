@@ -166,10 +166,8 @@ pub async fn start_server(from_servers: StreamConsumer) {
 	}
 }
 
-
 ///处理从实体过来的消息。
 async fn handle_from_entity_msg(manager_type: &str, msg: &JsonValue, context: &mut RunContext) {
-	let close_json = json::object! {manager_type:"close"};
 	let id = match msg["id"].as_u32() {
 		None => {
 			log::error!("未在消息里面找到id。msg:{}", msg);
@@ -188,6 +186,7 @@ async fn handle_from_entity_msg(manager_type: &str, msg: &JsonValue, context: &m
 
 	match manager_type {
 		"close" => {
+			let close_json = json::object! {manager_type:"close"};
 			if let Err(e) = entity_sender.send(close_json.clone()).await {
 				log::error!("发送消息出现异常。对端可能已经关闭。e:{}", e);
 			}
@@ -202,8 +201,6 @@ async fn handle_from_entity_msg(manager_type: &str, msg: &JsonValue, context: &m
 
 ///处理从消息队列过来的实体相关的消息。
 async fn handle_queue_msg(topic: &str, json: JsonValue, context: &mut RunContext) {
-	let close_json = json::parse(r#"{manager_type:"close"}"#).unwrap();
-
 	let id = match json["id"].as_u32() {
 		None => {
 			error!("接收的消息未指定id。直接放弃。msg:{}", json);
@@ -229,6 +226,7 @@ async fn handle_queue_msg(topic: &str, json: JsonValue, context: &mut RunContext
 			let mut entitys = entity_manager.entitys.write().await;
 			if let Some(_) = entitys.get(&id) {
 				if let Some(sender) = context.senders.remove(&id) {
+					let close_json = json::object! {manager_type:"close"};
 					if let Err(e) = sender.send(close_json.clone()).await {
 						log::warn!("向entity发送关闭操作失败。e:{}", e);
 					}
@@ -288,6 +286,7 @@ async fn handle_queue_msg(topic: &str, json: JsonValue, context: &mut RunContext
 			let mut entitys = entity_manager.entitys.write().await;
 			if let Some(_) = entitys.get(&id) {
 				if let Some(sender) = context.senders.remove(&id) {
+					let close_json = json::object! {manager_type:"close"};
 					if let Err(e) = sender.send(close_json.clone()).await {
 						log::warn!("向entity发送关闭操作失败。e:{}", e);
 					}

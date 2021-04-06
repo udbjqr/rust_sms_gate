@@ -71,6 +71,7 @@ impl CustomEntity {
 		let (manage_to_entity_tx, manage_to_entity_rx) = mpsc::channel(0xFFFFFFFF);
 		let (channel_to_entity_tx, channel_to_entity_rx) = mpsc::channel(0xFFFFFFFF);
 
+		log::info!("通道{},,开始启动处理消息.", self.name);
 		//这里开始自己的消息处理
 		get_runtime().spawn(start_entity(manage_to_entity_rx, channel_to_entity_rx, self.channels.clone()));
 
@@ -82,7 +83,7 @@ impl CustomEntity {
 
 #[async_trait]
 impl Entity for CustomEntity {
-	async fn login_attach(&mut self, json: JsonValue) -> (usize,SmsStatus<JsonValue>, u32, u32, Option<mpsc::Receiver<JsonValue>>, Option<mpsc::Receiver<JsonValue>>, Option<mpsc::Sender<JsonValue>>) {
+	async fn login_attach(&mut self, json: JsonValue) -> (usize, SmsStatus<JsonValue>, u32, u32, Option<mpsc::Receiver<JsonValue>>, Option<mpsc::Receiver<JsonValue>>, Option<mpsc::Sender<JsonValue>>) {
 		//这里已经开了锁。如果下面执行时间有点长。就需要注意。附加操作整个倒是不长。
 		let mut channels = self.channels.write().await;
 		let index = channels.iter().rposition(|i| i.is_active == false);

@@ -4,11 +4,13 @@ use std::sync::Arc;
 
 use crate::entity::{CustomEntity, Entity, EntityManager};
 use crate::get_runtime;
-use crate::global::{ISMG_ID, get_sequence_id};
+use crate::global::{ISMG_ID, get_sequence_id, message_sender};
 use json::JsonValue;
 use std::time::SystemTime;
 use chrono::{Local, Datelike, Timelike};
 use std::str::FromStr;
+use std::collections::HashMap;
+
 
 #[test]
 fn test_json_array() {

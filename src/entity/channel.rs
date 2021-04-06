@@ -9,10 +9,10 @@ use tokio::time::{Duration, timeout};
 use tokio_util::codec::{Decoder, Encoder, Framed};
 
 use crate::entity::EntityManager;
-use crate::entity::tcp_handle::handle_rev_msg;
+use crate::entity::tcp_handle::channel_send_to_queue;
 use crate::get_runtime;
 use crate::protocol::{MsgType, Protocol, SmsStatus::{self, MessageError, Success}};
-use crate::protocol::names::{MSG_TYPE, STATUS, USER_ID};
+use crate::protocol::names::{MSG_TYPE, STATUS, USER_ID, WAIT_RECEIPT};
 use std::time::{Instant};
 
 #[derive(Debug)]
@@ -173,22 +173,24 @@ impl<T> Channel<T>
 					idle_count = 0;
 				  match msg {
 				    Some(Ok(mut json)) => {
-							// 超出返回流量超出
               if curr_rx <= self.rx_limit {
 								//当收到的不是回执才回返回Some.
 								if let Some(resp) = self.protocol.encode_receipt(SmsStatus::Success(()),&mut json) {
+									if let Err(e) = channel_to_entity_tx.send(json).await {
+										log::error!("向实体发送消息出现异常, e:{}", e);
+									}
+
 									if let Err(e) = framed.send(resp).await{
 										error!("发送回执出现错误, e:{}", e);
 									}
-									get_runtime().spawn(handle_rev_msg(json));
 								} else {
 									//把回执发回给实体处理回执
 									if let Err(e) = channel_to_entity_tx.send(json).await {
 										log::error!("向实体发送消息出现异常, e:{}", e);
-										return;
 									}
 								}
 							} else {
+								// 超出,返回流量超出
 								if let Some(resp) = self.protocol.encode_receipt(SmsStatus::TrafficRestrictions(()),&mut json) {
 									//当消息需要需要返回的才记录接收数量.即: 当消息为返回消息时不进行记录.
 							    curr_rx = curr_rx + 1;
@@ -221,6 +223,7 @@ impl<T> Channel<T>
 									// 计数加1
 									curr_tx = curr_tx + 1;
 									//把收到的消息发送给实体
+									json[WAIT_RECEIPT] = true.into();
 									if let Err(e) = channel_to_entity_tx.send(send).await {
 										log::error!("向实体发送消息出现异常, e:{}", e);
 										return;
@@ -246,6 +249,7 @@ impl<T> Channel<T>
 									// 成功计数加1
 									curr_tx = curr_tx + 1;
 									//把收到的消息发送给实体
+									json[WAIT_RECEIPT] = true.into();
 									if let Err(e) = channel_to_entity_tx.send(send).await {
 										log::error!("向实体发送消息出现异常, e:{}", e);
 										return;

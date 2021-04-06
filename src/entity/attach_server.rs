@@ -77,6 +77,7 @@ impl ServerEntity {
 		let (manage_to_entity_tx, manage_to_entity_rx) = mpsc::channel(0xFFFFFFFF);
 		let (channel_to_entity_tx, channel_to_entity_rx) = mpsc::channel(0xFFFFFFFF);
 
+		log::info!("通道{},,开始启动处理消息.", self.name);
 		//这里开始自己的消息处理
 		get_runtime().spawn(start_entity(manage_to_entity_rx, channel_to_entity_rx, self.channels.clone()));
 
