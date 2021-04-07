@@ -4,9 +4,10 @@ use std::sync::atomic::Ordering::Relaxed;
 
 use async_trait::async_trait;
 use json::JsonValue;
-use tokio::sync::mpsc::{self, Receiver, Sender};
+use tokio::sync::mpsc::{self};
 use tokio::sync::RwLock;
 
+use crate::protocol::cmpp32::Cmpp32;
 use crate::entity::{ChannelStates, Entity, start_entity};
 use crate::entity::channel::Channel;
 use crate::get_runtime;
@@ -58,7 +59,7 @@ impl ServerEntity {
 			login_name,
 			password,
 			addr,
-			version,
+			version: version.to_uppercase(),
 			read_limit,
 			write_limit,
 			max_channel_number,
@@ -67,7 +68,7 @@ impl ServerEntity {
 			entity_to_manager_tx: send_to_manager_tx,
 			channel_to_entity_tx: None,
 			is_active: Arc::new(AtomicBool::new(true)),
-			protocol,
+			protocol: protocol.to_uppercase(),
 		}
 	}
 	///开启一个entity的启动。连接对端,准备接收数据等
@@ -79,7 +80,7 @@ impl ServerEntity {
 
 		log::info!("通道{},,开始启动处理消息.", self.name);
 		//这里开始自己的消息处理
-		get_runtime().spawn(start_entity(manage_to_entity_rx, channel_to_entity_rx, self.channels.clone()));
+		get_runtime().spawn(start_entity(manage_to_entity_rx, channel_to_entity_rx, self.channels.clone(), self.id));
 
 		self.channel_to_entity_tx = Some(channel_to_entity_tx);
 
@@ -106,17 +107,23 @@ impl ServerEntity {
 
 				for item in channels.iter() {
 					if item.is_active == false {
-						match protocol_name.as_str() {
+						match (protocol_name.as_str(), version.as_str()) {
 							//TODO 根据协议生成对象
-							"cmpp48" => {
+							("CMPP", "48") => {
 								let mut channel = Channel::new(Cmpp48::new(), false);
-								if let Err(e) = channel.start_connect(id, addr.as_str(), user_name.as_str(), password.as_str(), version.as_str()).await {
+								if let Err(e) = channel.start_connect(id, addr.as_str(), user_name.as_str(), password.as_str()).await {
 									log::error!("连接服务端出现异常。。e:{}", e);
 								}
 							}
-							"sgip" => {
+							("CMPP", "32") => {
+								let mut channel = Channel::new(Cmpp32::new(), false);
+								if let Err(e) = channel.start_connect(id, addr.as_str(), user_name.as_str(), password.as_str()).await {
+									log::error!("连接服务端出现异常。。e:{}", e);
+								}
+							}
+							("SGIP", _) => {
 								let mut channel = Channel::new(Sgip::new(), false);
-								if let Err(e) = channel.start_connect(id, addr.as_str(), user_name.as_str(), password.as_str(), version.as_str()).await {
+								if let Err(e) = channel.start_connect(id, addr.as_str(), user_name.as_str(), password.as_str()).await {
 									log::error!("连接服务端出现异常。。e:{}", e);
 								}
 							}
@@ -134,7 +141,7 @@ impl ServerEntity {
 
 #[async_trait]
 impl Entity for ServerEntity {
-	async fn login_attach(&mut self, json: JsonValue) -> (usize, SmsStatus<JsonValue>, u32, u32, Option<Receiver<JsonValue>>, Option<Receiver<JsonValue>>, Option<Sender<JsonValue>>) {
+	async fn login_attach(&mut self, json: JsonValue) -> (usize, SmsStatus<JsonValue>, u32, u32, Option<mpsc::Receiver<JsonValue>>, Option<mpsc::Receiver<JsonValue>>, Option<mpsc::Sender<JsonValue>>) {
 		let mut channels = self.channels.write().await;
 		let index = channels.iter().rposition(|i| i.is_active == false);
 

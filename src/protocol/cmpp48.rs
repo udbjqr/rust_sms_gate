@@ -16,10 +16,31 @@ use encoding::{Encoding, EncoderTrap};
 ///CMPP协议3.0的处理
 #[derive(Debug, Default)]
 pub struct Cmpp48 {
+	version: u32,
 	codec: LengthDelimitedCodec,
 }
 
 impl Protocol for Cmpp48 {
+	fn login_rep(&self, status: u32, json: &JsonValue) -> BytesMut {
+		let mut dst = BytesMut::with_capacity(33);
+		dst.put_u32(33);
+		dst.put_u32(self.get_type_id(MsgType::ConnectResp));
+
+		dst.put_u32(json[SEQ_ID].as_u32().unwrap());
+		dst.put_u32(status);
+
+		let str = json[AUTHENTICATOR].as_str().unwrap().as_bytes();
+
+		dst.extend_from_slice(&str[0..16]);
+		dst.put_u8(json[VERSION].as_u8().unwrap());
+
+		dst
+	}
+
+	fn get_version(&self) -> u32 {
+		self.version
+	}
+
 	fn encode_receipt(&self, status: SmsStatus<()>, json: &mut JsonValue) -> Option<BytesMut> {
 		match self.get_type_enum(json[MSG_TYPE].as_u32().unwrap()) {
 			MsgType::Submit => self.encode_submit_resp(status, json),
@@ -48,7 +69,7 @@ impl Protocol for Cmpp48 {
 	}
 
 
-	fn encode_login_msg(&self, sp_id: &str, password: &str, version: &str) -> Result<BytesMut, io::Error> {
+	fn encode_login_msg(&self, sp_id: &str, password: &str) -> Result<BytesMut, io::Error> {
 		if sp_id.len() != 6 {
 			return Err(io::Error::new(io::ErrorKind::Other, "sp_id,长度应该为6位"));
 		}
@@ -86,27 +107,12 @@ impl Protocol for Cmpp48 {
 		dst.put_u32(get_sequence_id(1));
 		dst.extend_from_slice(sp_id.as_bytes());
 		dst.extend_from_slice(auth.as_ref());
-		match version {
-			"2.0" => dst.put_u8(32),
-			"3.0" => dst.put_u8(48),
-			_ => dst.put_u8(48)
-		}
+		dst.put_u8(48);
 		dst.put_u32(time);
 
 		Ok(dst)
 	}
 
-	fn encode_login_rep(&self, status: &SmsStatus<JsonValue>) -> BytesMut {
-		match status {
-			SmsStatus::Success(json) => self.login_rep(self.get_status_id(status), json),
-			SmsStatus::AddError(json) => self.login_rep(self.get_status_id(status), json),
-			SmsStatus::AuthError(json) => self.login_rep(self.get_status_id(status), json),
-			SmsStatus::VersionError(json) => self.login_rep(self.get_status_id(status), json),
-			SmsStatus::LoginOtherError(json) => self.login_rep(self.get_status_id(status), json),
-			SmsStatus::TrafficRestrictions(json) => self.login_rep(self.get_status_id(status), json),
-			SmsStatus::MessageError(json) => self.login_rep(self.get_status_id(status), json),
-		}
-	}
 
 	///处理送过来的消息。因为之前使用的解码器是在单线程内。
 	/// 所以只处理断包和粘包。
@@ -279,6 +285,7 @@ impl Clone for Cmpp48 {
 impl Cmpp48 {
 	pub fn new() -> Self {
 		Cmpp48 {
+			version: 48,
 			codec: LengthDelimitedCodec::builder()
 				.length_field_offset(0)
 				.length_field_length(4)
@@ -723,22 +730,6 @@ impl Cmpp48 {
 		Ok((dst, seq_ids))
 	}
 
-	fn login_rep(&self, status: u32, json: &JsonValue) -> BytesMut {
-		let mut dst = BytesMut::with_capacity(33);
-		dst.put_u32(33);
-		dst.put_u32(self.get_type_id(MsgType::ConnectResp));
-
-		dst.put_u32(json[SEQ_ID].as_u32().unwrap());
-		dst.put_u32(status);
-
-		let str = json[AUTHENTICATOR].as_str().unwrap().as_bytes();
-
-		dst.extend_from_slice(&str[0..16]);
-		dst.put_u8(json[VERSION].as_u8().unwrap());
-
-		dst
-	}
-
 	fn decode_connect_resp(&self, buf: &mut BytesMut, seq: u32, tp: u32) -> Result<JsonValue, io::Error> {
 		let mut json = JsonValue::new_object();
 		json[MSG_TYPE] = tp.into();
@@ -844,7 +835,7 @@ impl Cmpp48 {
 		json[SEQ_ID] = seq.into();
 		json[USER_ID] = load_utf8_string(buf, 6).into();
 		json[AUTHENTICATOR] = copy_to_bytes(buf, 16).as_ref().into();
-		json[VERSION] = buf.get_u8().into();
+		json[VERSION] = (buf.get_u8() as u32).into();
 
 		Ok(json)
 	}

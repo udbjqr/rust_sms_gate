@@ -9,7 +9,7 @@ use tokio::io;
 pub use crate::protocol::msg_type::MsgType;
 pub use crate::protocol::msg_type::SmsStatus;
 
-pub use self::cmpp::Cmpp48;
+pub use self::cmpp48::Cmpp48;
 pub use self::sgip::Sgip;
 use chrono::{Local, Datelike, Timelike};
 use crate::protocol::names::{LONG_SMS_TOTAL, LONG_SMS_NOW_NUMBER, MSG_CONTENT};
@@ -18,11 +18,12 @@ use encoding::{Encoding, DecoderTrap};
 
 ///协议的对应部分。用来编码和解码
 
-mod cmpp;
+mod cmpp48;
 mod smgp;
 mod sgip;
 mod msg_type;
 pub mod names;
+pub(crate) mod cmpp32;
 
 #[derive(Debug, Copy, Clone)]
 pub enum ProtocolType {
@@ -52,14 +53,27 @@ impl Display for ProtocolType {
 }
 
 pub trait Protocol: Send + Sync {
+	fn get_version(&self) -> u32;
 	///为收到的消息生成一个回执消息.当本身就是回执消息的时候返回None.
 	fn encode_receipt(&self, status: SmsStatus<()>, json: &mut JsonValue) -> Option<BytesMut>;
 	///生成实体过来.这里应该是只会有单独的几个消息.其他的不应该在这里。
 	fn encode_from_entity_message(&self, json: &JsonValue) -> Result<(BytesMut, Vec<u32>), io::Error>;
 
-	fn encode_login_msg(&self, user_name: &str, password: &str, version: &str) -> Result<BytesMut, io::Error>;
+	fn encode_login_msg(&self, user_name: &str, password: &str) -> Result<BytesMut, io::Error>;
 	///根据对方给的请求,处理以后的编码消息
-	fn encode_login_rep(&self, status: &SmsStatus<JsonValue>) -> BytesMut;
+	fn encode_login_rep(&self, status: &SmsStatus<JsonValue>) -> BytesMut {
+		match status {
+			SmsStatus::Success(json) => self.login_rep(self.get_status_id(status), json),
+			SmsStatus::AddError(json) => self.login_rep(self.get_status_id(status), json),
+			SmsStatus::AuthError(json) => self.login_rep(self.get_status_id(status), json),
+			SmsStatus::VersionError(json) => self.login_rep(self.get_status_id(status), json),
+			SmsStatus::LoginOtherError(json) => self.login_rep(self.get_status_id(status), json),
+			SmsStatus::TrafficRestrictions(json) => self.login_rep(self.get_status_id(status), json),
+			SmsStatus::MessageError(json) => self.login_rep(self.get_status_id(status), json),
+		}
+	}
+
+	fn login_rep(&self, status: u32, json: &JsonValue) -> BytesMut;
 
 	fn decode_read_msg(&self, buf: &mut BytesMut) -> io::Result<Option<JsonValue>>;
 

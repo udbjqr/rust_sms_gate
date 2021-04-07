@@ -3,13 +3,14 @@ use json::JsonValue;
 use std::sync::Arc;
 use crate::entity::{ChannelStates, EntityManager};
 use std::collections::HashMap;
-use crate::protocol::names::{MANAGER_TYPE, MSG_TYPE_STR, ID, WAIT_RECEIPT, SEQ_ID, LONG_SMS_TOTAL, SRC_ID, DEST_ID, DEST_IDS, LONG_SMS_NOW_NUMBER, MSG_ID, MSG_CONTENT, MSG_IDS, RECEIVE_TIME};
+use crate::protocol::names::{MANAGER_TYPE, MSG_TYPE_STR, ID, WAIT_RECEIPT, SEQ_ID, LONG_SMS_TOTAL, SRC_ID, DEST_ID, DEST_IDS, LONG_SMS_NOW_NUMBER, MSG_ID, MSG_CONTENT, MSG_IDS, RECEIVE_TIME, ENTITY_ID, SEQ_IDS};
 use crate::protocol::MsgType;
 use crate::global::{message_sender, TOPIC_TO_B_SUBMIT, TOPIC_TO_B_DELIVER, TOPIC_TO_B_DELIVER_RESP, TOPIC_TO_B_SUBMIT_RESP, TOPIC_TO_B_REPORT_RESP, TOPIC_TO_B_REPORT};
 use crate::message_queue::KafkaMessageProducer;
 use std::ops::{Add};
 
 struct EntityRunContext {
+	entity_id: u32,
 	channels_map: HashMap<usize, (mpsc::Sender<JsonValue>, mpsc::Sender<JsonValue>)>,
 	wait_receipt_map: HashMap<u32, JsonValue>,
 	long_sms_cache: HashMap<String, Vec<Option<JsonValue>>>,
@@ -17,8 +18,9 @@ struct EntityRunContext {
 	channels: Arc<RwLock<Vec<ChannelStates>>>,
 }
 
-pub async fn start_entity(mut manager_to_entity_rx: mpsc::Receiver<JsonValue>, mut from_channel: mpsc::Receiver<JsonValue>, channels: Arc<RwLock<Vec<ChannelStates>>>) {
+pub async fn start_entity(mut manager_to_entity_rx: mpsc::Receiver<JsonValue>, mut from_channel: mpsc::Receiver<JsonValue>, channels: Arc<RwLock<Vec<ChannelStates>>>, entity_id: u32) {
 	let mut context = EntityRunContext {
+		entity_id,
 		channels_map: HashMap::new(),
 		wait_receipt_map: HashMap::new(),
 		long_sms_cache: HashMap::new(),
@@ -76,6 +78,7 @@ async fn handle_from_channel_rx(msg: Option<JsonValue>, context: &mut EntityRunC
 		}
 		Some(mut msg) => {
 			msg[RECEIVE_TIME] = chrono::Local::now().timestamp().into();
+			msg[ENTITY_ID] = context.entity_id.into();
 
 			match msg[MSG_TYPE_STR].as_str() {
 				Some(v) => {
@@ -84,7 +87,7 @@ async fn handle_from_channel_rx(msg: Option<JsonValue>, context: &mut EntityRunC
 						(MsgType::Deliver, Some(true)) |
 						(MsgType::Submit, Some(true)) |
 						(MsgType::Report, Some(true)) => {
-							context.wait_receipt_map.insert(get_key(&msg), msg);
+							insert_into_wait_receipt(&mut context.wait_receipt_map, msg);
 						}
 						(MsgType::ReportResp, _) => {
 							context.wait_receipt_map.remove(&get_key(&msg));
@@ -152,6 +155,29 @@ async fn handle_from_channel_rx(msg: Option<JsonValue>, context: &mut EntityRunC
 				}
 			}
 		}
+	}
+}
+
+fn get_key(msg: &JsonValue) -> u32 {
+	if let Some(id) = msg[SEQ_ID].as_u32() {
+		id
+	} else {
+		log::error!("get_key()收到的消息里面不包含seq_id.记录，并返回0.msg:{}", msg);
+		0
+	}
+}
+
+fn insert_into_wait_receipt(wait_receipt_map: &mut HashMap<u32, JsonValue>, json: JsonValue) {
+	//如果是长短信。目前只放一条。如果一条收到，就算是全都收到了。
+	//如果当前条未收到。准备全部进行重发。
+	if json[SEQ_IDS].is_array() && !json[SEQ_IDS].is_empty() {
+		if let Some(seq_id) = json[SEQ_IDS][0].as_u32() {
+			wait_receipt_map.insert(seq_id, json);
+		} else {
+			log::error!("insert_into_wait_receipt出现错误。SEQ_IDS内为空...json:{}", json);
+		}
+	} else {
+		log::error!("insert_into_wait_receipt出现错误。当前未取到SEQ_IDS...json:{}", json);
 	}
 }
 
@@ -230,9 +256,6 @@ async fn send_to_queue(to_queue: &Arc<KafkaMessageProducer>, topic: &str, key: &
 	}
 }
 
-fn get_key(json: &JsonValue) -> u32 {
-	*json[SEQ_ID].as_u32().get_or_insert(0)
-}
 
 ///entity处理来自于管理器端的消息
 async fn handle_from_manager_rx(msg: Option<JsonValue>, context: &mut EntityRunContext) {

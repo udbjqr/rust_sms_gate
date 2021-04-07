@@ -90,11 +90,16 @@ impl From<u32> for SgipType {
 ///Sgip协议3.0的处理
 #[derive(Debug, Default)]
 pub struct Sgip {
+	version:u32,
 	length_codec: LengthDelimitedCodec,
 }
 
 
 impl Protocol for Sgip {
+	fn get_version(&self) -> u32 {
+		unimplemented!()
+	}
+
 	fn encode_receipt(&self,  status: SmsStatus<()>, json: &mut JsonValue) -> Option<BytesMut> {
 		todo!()
 	}
@@ -104,11 +109,11 @@ impl Protocol for Sgip {
 	}
 
 
-	fn encode_login_msg(&self, sp_id: &str, password: &str, version: &str) -> Result<BytesMut, Error> {
+	fn encode_login_msg(&self, sp_id: &str, password: &str) -> Result<BytesMut, Error> {
 		unimplemented!()
 	}
 
-	fn encode_login_rep(&self, json: &SmsStatus<JsonValue>) -> BytesMut {
+	fn login_rep(&self, status: u32, json: &JsonValue) -> BytesMut {
 		unimplemented!()
 	}
 
@@ -142,6 +147,7 @@ impl Clone for Sgip {
 impl Sgip {
 	pub fn new() -> Self {
 		Sgip {
+			version: 0x0d,
 			length_codec: LengthDelimitedCodec::builder()
 				.length_field_offset(0)
 				.length_field_length(4)

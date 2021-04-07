@@ -7,7 +7,8 @@ use tokio::sync::{mpsc, RwLock};
 
 use crate::entity::{ChannelStates, Entity, start_entity};
 use crate::get_runtime;
-use crate::protocol::SmsStatus;
+use crate::protocol::{SmsStatus, Protocol};
+use crate::protocol::names::VERSION;
 
 #[derive(Debug)]
 pub struct CustomEntity {
@@ -73,7 +74,7 @@ impl CustomEntity {
 
 		log::info!("通道{},,开始启动处理消息.", self.name);
 		//这里开始自己的消息处理
-		get_runtime().spawn(start_entity(manage_to_entity_rx, channel_to_entity_rx, self.channels.clone()));
+		get_runtime().spawn(start_entity(manage_to_entity_rx, channel_to_entity_rx, self.channels.clone(), self.id));
 
 		self.channel_to_entity_tx = Some(channel_to_entity_tx);
 
@@ -84,7 +85,7 @@ impl CustomEntity {
 #[async_trait]
 impl Entity for CustomEntity {
 	async fn login_attach(&mut self, json: JsonValue) -> (usize, SmsStatus<JsonValue>, u32, u32, Option<mpsc::Receiver<JsonValue>>, Option<mpsc::Receiver<JsonValue>>, Option<mpsc::Sender<JsonValue>>) {
-		//这里已经开了锁。如果下面执行时间有点长。就需要注意。附加操作整个倒是不长。
+		//这里已经开了锁。如果下面执行时间有点长。就需要注意。
 		let mut channels = self.channels.write().await;
 		let index = channels.iter().rposition(|i| i.is_active == false);
 
@@ -95,10 +96,6 @@ impl Entity for CustomEntity {
 
 		let index = index.unwrap();
 		let item = channels.get_mut(index).unwrap();
-
-		//TODO 进行地址允许判断
-		//TODO 进行登录判断。
-		//TODO 进行密码检验。
 
 		//通过后进行附加上去的动作。
 		let (entity_to_channel_priority_tx, entity_to_channel_priority_rx) = mpsc::channel::<JsonValue>(5);
@@ -132,4 +129,24 @@ impl Entity for CustomEntity {
 	fn get_channels(&self) -> Arc<RwLock<Vec<ChannelStates>>> {
 		self.channels.clone()
 	}
+}
+
+
+pub fn check_custom_login<T>(json: &JsonValue, _entity: &mut Box<(dyn Entity + 'static)>, protocol: &T) -> Option<SmsStatus<JsonValue>>
+	where T: Protocol {
+	//TODO 进行地址允许判断
+	//TODO 进行登录判断。
+	//TODO 进行密码检验。
+
+	//进行版本检查
+	if let Some(version) = json[VERSION].as_u32() {
+		if version != protocol.get_version() {
+			return Some(SmsStatus::VersionError(json.clone()));
+		}
+	} else {
+		log::error!("附加至CustomEntity通道异常。json里面没有version。。json:{}", json);
+		return Some(SmsStatus::LoginOtherError(json.clone()));
+	}
+
+	None
 }

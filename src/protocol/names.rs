@@ -1,4 +1,5 @@
 pub static SEQ_ID: &'static str = "seq_id";
+pub static SEQ_IDS: &'static str = "seq_ids";
 ///SGIP协议增加的部分
 pub static SEQ_ID_HEAD: &'static str = "seq_id_head";
 pub static AUTHENTICATOR: &'static str = "authenticator";
@@ -6,6 +7,7 @@ pub static VERSION: &'static str = "version";
 pub static MSG_TYPE: &'static str = "msg_type";
 pub static MSG_TYPE_STR: &'static str = "msg_type_str";
 pub static RECEIVE_TIME: &'static str = "receive_time";
+pub static ENTITY_ID: &'static str = "entity_id";
 pub static WAIT_RECEIPT: &'static str = "wait_receipt";
 pub static STATUS: &'static str = "status";
 pub static USER_ID: &'static str = "user_id";
