@@ -23,10 +23,12 @@ pub static TOPIC_TO_B_DELIVER: &'static str = "toB.deliver";
 pub static TOPIC_TO_B_DELIVER_RESP: &'static str = "toB.deliver.response";
 pub static TOPIC_TO_B_REPORT: &'static str = "toB.report";
 pub static TOPIC_TO_B_REPORT_RESP: &'static str = "toB.report.response";
+pub static TOPIC_TO_B_FAILURE: &'static str = "sms.send.return.failure";
 
 pub static TOPIC_FROM_B_SUBMIT: &'static str = "send.submit";
 pub static TOPIC_FROM_B_DELIVER: &'static str = "send.deliver";
 pub static TOPIC_FROM_B_REPORT: &'static str = "send.report";
+
 
 lazy_static! {
 	static ref CONFIG: RwLock<JsonValue> = RwLock::new(load_config_file("config/setting.json"));
@@ -122,5 +124,6 @@ pub fn get_sequence_id(mut step: u32) -> u32 {
 	if step == 0 {
 		step = 1;
 	}
+
 	SEQUENCE.fetch_add(step, Ordering::Relaxed)
 }

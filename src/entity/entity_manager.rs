@@ -13,7 +13,7 @@ use crate::entity::{CustomEntity, Entity};
 use crate::entity::attach_server::ServerEntity;
 use crate::get_runtime;
 use crate::global::{load_config_file, TOPIC_FROM_B_SUBMIT, TOPIC_FROM_B_DELIVER, TOPIC_FROM_B_REPORT};
-use crate::protocol::names::{MANAGER_TYPE};
+use crate::protocol::names::{MANAGER_TYPE, VERSION, SERVICE_ID, NODE_ID};
 
 ///实体的管理对象。
 /// 负责处理消息队列送过来的实体的开启、关闭等操作
@@ -100,7 +100,7 @@ impl EntityManager {
 }
 
 struct RunContext {
-	give_entity_tx: mpsc::Sender<JsonValue>,
+	entity_to_manager_tx: mpsc::Sender<JsonValue>,
 	senders: HashMap<u32, mpsc::Sender<JsonValue>>,
 }
 
@@ -108,7 +108,7 @@ pub async fn start_server(from_servers: StreamConsumer) {
 	let (give_entity, mut from_entity) = mpsc::channel::<JsonValue>(0xffffffff);
 	let senders = HashMap::new();
 
-	let mut context = RunContext { give_entity_tx: give_entity, senders };
+	let mut context = RunContext { entity_to_manager_tx: give_entity, senders };
 	loop {
 		tokio::select! {
 			biased;
@@ -200,7 +200,7 @@ async fn handle_from_entity_msg(manager_type: &str, msg: &JsonValue, context: &m
 }
 
 ///处理从消息队列过来的实体相关的消息。
-async fn handle_queue_msg(topic: &str, json: JsonValue, context: &mut RunContext) {
+async fn handle_queue_msg(topic: &str, mut json: JsonValue, context: &mut RunContext) {
 	let id = match json["id"].as_u32() {
 		None => {
 			error!("接收的消息未指定id。直接放弃。msg:{}", json);
@@ -213,6 +213,7 @@ async fn handle_queue_msg(topic: &str, json: JsonValue, context: &mut RunContext
 	match topic {
 		"send.submit" | "send.deliver" | "send.report" => {
 			if let Some(sender) = context.senders.get(&id) {
+				json[MANAGER_TYPE] = "send".into();
 				if let Err(e) = sender.send(json).await {
 					log::error!("发送出现异常.e:{}", e);
 				}
@@ -236,51 +237,52 @@ async fn handle_queue_msg(topic: &str, json: JsonValue, context: &mut RunContext
 				entitys.remove(&id);
 			};
 
-			match topic.starts_with("account") {
-				true => {
-					let mut entity = Box::new(CustomEntity::new(
-						id,
-						json["name"].as_str().unwrap_or("未知").to_string(),
-						json["desc"].as_str().unwrap_or("").to_string(),
-						json["login_name"].as_str().unwrap_or("").to_string(),
-						json["password"].as_str().unwrap_or("").to_string(),
-						json["allow_addrs"].as_str().unwrap_or("").split(",").map(|s| s.to_string()).collect(),
-						json["read_limit"].as_u32().unwrap_or(0xffffffff),
-						json["write_limit"].as_u32().unwrap_or(0xffffffff),
-						json["max_channel_number"].as_usize().unwrap_or(0xff),
-						json,
-						context.give_entity_tx.clone(),
-					));
+			if topic.starts_with("account") {
+				let mut entity = Box::new(CustomEntity::new(
+					id,
+					json["name"].as_str().unwrap_or("未知").to_string(),
+					json[SERVICE_ID].as_str().unwrap_or("未知").to_string(),
+					json[NODE_ID].as_u32().unwrap_or(0),
+					json["desc"].as_str().unwrap_or("").to_string(),
+					json["login_name"].as_str().unwrap_or("").to_string(),
+					json["password"].as_str().unwrap_or("").to_string(),
+					json["allow_addrs"].as_str().unwrap_or("").split(",").map(|s| s.to_string()).collect(),
+					json["read_limit"].as_u32().unwrap_or(0xffffffff),
+					json["write_limit"].as_u32().unwrap_or(0xffffffff),
+					json["max_channel_number"].as_usize().unwrap_or(0xff),
+					json,
+					context.entity_to_manager_tx.clone(),
+				));
 
-					let send_to_entity = entity.start();
+				let send_to_entity = entity.start();
 
-					//放入管理队列的数据
-					context.senders.insert(entity.get_id(), send_to_entity);
-					entitys.insert(entity.get_id(), entity);
-				}
-				false => {
-					let mut entity = ServerEntity::new(
-						id,
-						json["name"].as_str().unwrap_or("未知").to_string(),
-						json["login_name"].as_str().unwrap_or("").to_string(),
-						json["password"].as_str().unwrap_or("").to_string(),
-						json["addr"].as_str().unwrap_or("").to_string(),
-						json["version"].as_str().unwrap_or("").to_string(),
-						json["protocol"].as_str().unwrap_or("").to_string(),
-						json["read_limit"].as_u32().unwrap_or(0xffffffff),
-						json["write_limit"].as_u32().unwrap_or(0xffffffff),
-						json["max_channel_number"].as_usize().unwrap_or(0xff),
-						json,
-						context.give_entity_tx.clone(),
-					);
+				//放入管理队列的数据
+				context.senders.insert(entity.get_id(), send_to_entity);
+				entitys.insert(entity.get_id(), entity);
+			} else {
+				let mut entity = ServerEntity::new(
+					id,
+					json["name"].as_str().unwrap_or("未知").to_string(),
+					json[SERVICE_ID].as_str().unwrap_or("未知").to_string(),
+					json[NODE_ID].as_u32().unwrap_or(0),
+					json["login_name"].as_str().unwrap_or("").to_string(),
+					json["password"].as_str().unwrap_or("").to_string(),
+					json["addr"].as_str().unwrap_or("").to_string(),
+					json[VERSION].as_str().unwrap_or("0").parse().unwrap_or(0),
+					json["protocol"].as_str().unwrap_or("").to_string(),
+					json["read_limit"].as_u32().unwrap_or(0xffffffff),
+					json["write_limit"].as_u32().unwrap_or(0xffffffff),
+					json["max_channel_number"].as_usize().unwrap_or(0xff),
+					json,
+					context.entity_to_manager_tx.clone(),
+				);
 
-					let send_to_entity = entity.start().await;
+				let send_to_entity = entity.start().await;
 
-					//放入管理队列的数据
-					context.senders.insert(entity.get_id(), send_to_entity);
-					entitys.insert(entity.get_id(), Box::new(entity));
-				}
-			};
+				//放入管理队列的数据
+				context.senders.insert(entity.get_id(), send_to_entity);
+				entitys.insert(entity.get_id(), Box::new(entity));
+			}
 		}
 		"account.remove" | "passage.remove" => {
 			let mut entitys = entity_manager.entitys.write().await;

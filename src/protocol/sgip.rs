@@ -1,140 +1,421 @@
 #![allow(unused)]
 
-use bytes::BytesMut;
+use bytes::{BytesMut, BufMut, Buf};
 use json::JsonValue;
 use tokio::io;
 use tokio::io::Error;
 use tokio_util::codec::{Decoder, Encoder, LengthDelimitedCodec};
 
-use crate::protocol::{Protocol, SmsStatus};
+use crate::protocol::{SmsStatus, Protocol};
 use crate::protocol::msg_type::MsgType;
+use crate::protocol::implements::{ProtocolImpl, fill_bytes_zero, copy_to_bytes, get_time, load_utf8_string, decode_msg_content};
+use crate::protocol::names::{LOGIN_NAME, PASSWORD, NODE_ID, MSG_TYPE_U32, SEQ_TIME, SEQ_ID, STATUS, MSG_CONTENT, SERVICE_ID, SP_ID, SRC_ID, DEST_IDS, SEQ_IDS, TP_UDHI, MSG_FMT};
+use chrono::{DateTime, Local, Datelike, Timelike};
+use crate::global::get_sequence_id;
+use crate::protocol::msg_type::MsgType::{Connect, SubmitResp};
+use encoding::all::UTF_16BE;
+use encoding::{EncoderTrap, Encoding};
+use crate::global::FILL_ZERO;
 
-#[derive(Debug, Clone, Copy)]
-#[repr(u32)]
-pub enum SgipType {
-	SgipConnect = 0x00000001,
-	SgipConnectResp = 0x80000001,
-	SgipTerminate = 0x00000002,
-	SgipTerminateResp = 0x80000002,
-	SgipSubmit = 0x00000004,
-	SgipSubmitResp = 0x80000004,
-	SgipDeliver = 0x00000005,
-	SgipDeliverResp = 0x80000005,
-	SgipQuery = 0x00000006,
-	SgipQueryResp = 0x80000006,
-	SgipCancel = 0x00000007,
-	SgipCancelResp = 0x80000007,
-	SgipActiveTest = 0x00000008,
-	SgipActiveTestResp = 0x80000008,
-	SgipFwd = 0x00000009,
-	SgipFwdResp = 0x80000009,
-	SgipMtRoute = 0x00000010,
-	SgipMtRouteResp = 0x80000010,
-	SgipMoRoute = 0x00000011,
-	SgipMoRouteResp = 0x80000011,
-	SgipGetMtRoute = 0x00000012,
-	SgipGetMtRouteResp = 0x80000012,
-	SgipMtRouteUpdate = 0x00000013,
-	SgipMtRouteUpdateResp = 0x80000013,
-	SgipMoRouteUpdate = 0x00000014,
-	SgipMoRouteUpdateResp = 0x80000014,
-	SgipPushMtRouteUpdate = 0x00000015,
-	SgipPushMtRouteUpdateResp = 0x80000015,
-	SgipPushMoRouteUpdate = 0x00000016,
-	SgipPushMoRouteUpdateResp = 0x80000016,
-	SgipGetMoRoute = 0x00000017,
-	SgipGetMoRouteResp = 0x80000017,
-	UnKnow = 0x0,
-}
-
-impl From<u32> for SgipType {
-	fn from(id: u32) -> Self {
-		match id {
-			0x00000004 => SgipType::SgipSubmit,
-			0x80000004 => SgipType::SgipSubmitResp,
-			0x00000005 => SgipType::SgipDeliver,
-			0x80000005 => SgipType::SgipDeliverResp,
-			0x00000001 => SgipType::SgipConnect,
-			0x80000001 => SgipType::SgipConnectResp,
-			0x00000002 => SgipType::SgipTerminate,
-			0x80000002 => SgipType::SgipTerminateResp,
-			0x00000006 => SgipType::SgipQuery,
-			0x80000006 => SgipType::SgipQueryResp,
-			0x00000007 => SgipType::SgipCancel,
-			0x80000007 => SgipType::SgipCancelResp,
-			0x00000008 => SgipType::SgipActiveTest,
-			0x80000008 => SgipType::SgipActiveTestResp,
-			0x00000009 => SgipType::SgipFwd,
-			0x80000009 => SgipType::SgipFwdResp,
-			0x00000010 => SgipType::SgipMtRoute,
-			0x80000010 => SgipType::SgipMtRouteResp,
-			0x00000011 => SgipType::SgipMoRoute,
-			0x80000011 => SgipType::SgipMoRouteResp,
-			0x00000012 => SgipType::SgipGetMtRoute,
-			0x80000012 => SgipType::SgipGetMtRouteResp,
-			0x00000013 => SgipType::SgipMtRouteUpdate,
-			0x80000013 => SgipType::SgipMtRouteUpdateResp,
-			0x00000014 => SgipType::SgipMoRouteUpdate,
-			0x80000014 => SgipType::SgipMoRouteUpdateResp,
-			0x00000015 => SgipType::SgipPushMtRouteUpdate,
-			0x80000015 => SgipType::SgipPushMtRouteUpdateResp,
-			0x00000016 => SgipType::SgipPushMoRouteUpdate,
-			0x80000016 => SgipType::SgipPushMoRouteUpdateResp,
-			0x00000017 => SgipType::SgipGetMoRoute,
-			0x80000017 => SgipType::SgipGetMoRouteResp,
-			_ => SgipType::UnKnow,
-		}
-	}
-}
-
-///Sgip协议3.0的处理
+///Sgip协议的处理
 #[derive(Debug, Default)]
 pub struct Sgip {
-	version:u32,
+	version: u32,
 	length_codec: LengthDelimitedCodec,
 }
 
 
-impl Protocol for Sgip {
-	fn get_version(&self) -> u32 {
-		unimplemented!()
-	}
-
-	fn encode_receipt(&self,  status: SmsStatus<()>, json: &mut JsonValue) -> Option<BytesMut> {
-		todo!()
-	}
-
-	fn encode_from_entity_message(&self, json: &JsonValue) -> Result<(BytesMut,Vec<u32>), Error> {
-		unimplemented!()
-	}
-
-
-	fn encode_login_msg(&self, sp_id: &str, password: &str) -> Result<BytesMut, Error> {
-		unimplemented!()
-	}
-
-	fn login_rep(&self, status: u32, json: &JsonValue) -> BytesMut {
-		unimplemented!()
-	}
-
-	fn decode_read_msg(&self, buf: &mut BytesMut) -> io::Result<Option<JsonValue>> {
-		unimplemented!()
+impl ProtocolImpl for Sgip {
+	fn get_framed(&mut self, buf: &mut BytesMut) -> io::Result<Option<BytesMut>> {
+		self.length_codec.decode(buf)
 	}
 
 	fn get_type_id(&self, t: MsgType) -> u32 {
-		unimplemented!()
+		match t {
+			MsgType::Submit => 0x00000003,
+			MsgType::SubmitResp => 0x80000003,
+			MsgType::Deliver => 0x00000004,
+			MsgType::DeliverResp => 0x80000004,
+			MsgType::Report => 0x00000005,
+			MsgType::ReportResp => 0x80000005,
+			MsgType::Connect => 0x00000001,
+			MsgType::ConnectResp => 0x80000001,
+			MsgType::Terminate => 0x00000002,
+			MsgType::TerminateResp => 0x80000002,
+			MsgType::Query => 0x00000006,
+			MsgType::QueryResp => 0x80000006,
+			MsgType::Cancel => 0x00000007,
+			MsgType::CancelResp => 0x80000007,
+			MsgType::ActiveTest => 0x00000008,
+			MsgType::ActiveTestResp => 0x80000008,
+			MsgType::UNKNOWN => 0,
+			_ => 0
+		}
 	}
 
 	fn get_type_enum(&self, v: u32) -> MsgType {
-		unimplemented!()
+		match v {
+			0x00000003 => MsgType::Submit,
+			0x80000003 => MsgType::SubmitResp,
+			0x00000004 => MsgType::Deliver,
+			0x80000004 => MsgType::DeliverResp,
+			0x00000005 => MsgType::Report,
+			0x80000005 => MsgType::ReportResp,
+			0x00000001 => MsgType::Connect,
+			0x80000001 => MsgType::ConnectResp,
+			0x00000002 => MsgType::Terminate,
+			0x80000002 => MsgType::TerminateResp,
+			0x00000006 => MsgType::Query,
+			0x80000006 => MsgType::QueryResp,
+			0x00000007 => MsgType::Cancel,
+			0x80000007 => MsgType::CancelResp,
+			0x00000008 => MsgType::ActiveTest,
+			0x80000008 => MsgType::ActiveTestResp,
+			_ => MsgType::UNKNOWN,
+		}
 	}
 
-	fn get_status_id<T>(&self, t: &SmsStatus<T>) -> u32 {
-		unimplemented!()
+	fn get_status_id(&self, status: &SmsStatus) -> u32 {
+		match status {
+			SmsStatus::Success => 0,
+			SmsStatus::MessageError => 7,
+			SmsStatus::AddError => 2,
+			SmsStatus::AuthError => 1,
+			SmsStatus::VersionError => 4,
+			SmsStatus::TrafficRestrictions => 8,
+			SmsStatus::LoginOtherError => 5,
+			SmsStatus::UNKNOWN => 999,
+		}
 	}
 
-	fn get_status_enum<T>(&self, v: u32, json: T) -> SmsStatus<T> {
-		unimplemented!()
+	fn get_status_enum(&self, v: u32) -> SmsStatus {
+		match v {
+			0 => SmsStatus::Success,
+			7 => SmsStatus::MessageError,
+			2 => SmsStatus::AddError,
+			1 => SmsStatus::AuthError,
+			4 => SmsStatus::VersionError,
+			8 => SmsStatus::TrafficRestrictions,
+			5 => SmsStatus::LoginOtherError,
+			_ => { SmsStatus::LoginOtherError }
+		}
+	}
+
+	///通过给定的账号密码。计算实际向客户发送的消息，也是用来进行校验密码是否正确。
+	fn get_auth(&self, _sp_id: &str, password: &str, _timestamp: u32) -> String {
+		password.to_string()
+	}
+
+	fn encode_submit(&self, json: &mut JsonValue) -> Result<BytesMut, Error> {
+		let msg_content = match json[MSG_CONTENT].as_str() {
+			None => {
+				log::error!("没有内容字串.退出..json:{}", json);
+				return Err(io::Error::new(io::ErrorKind::NotFound, "没有内容字串"));
+			}
+			Some(v) => v
+		};
+
+		//编码以后的消息内容
+		let msg_content_code = match UTF_16BE.encode(msg_content, EncoderTrap::Strict) {
+			Ok(v) => v,
+			Err(e) => {
+				log::error!("字符串内容解码出现错误..json:{}.e:{}", json, e);
+				return Err(io::Error::new(io::ErrorKind::Other, "字符串内容解码出现错误"));
+			}
+		};
+
+		let service_id = match json[SERVICE_ID].as_str() {
+			Some(v) => v,
+			None => {
+				log::error!("没有service_id.退出..json:{}", json);
+				return Err(io::Error::new(io::ErrorKind::NotFound, "没有service_id"));
+			}
+		};
+
+		let corp_id = match json[SP_ID].as_str() {
+			Some(v) => v,
+			None => {
+				log::error!("没有sp_id.退出..json:{}", json);
+				return Err(io::Error::new(io::ErrorKind::NotFound, "没有sp_id"));
+			}
+		};
+
+		let node_id = match json[NODE_ID].as_u32() {
+			Some(v) => v,
+			None => {
+				log::error!("没有node_id.退出..json:{}", json);
+				return Err(io::Error::new(io::ErrorKind::NotFound, "没有node_id"));
+			}
+		};
+
+		let src_id = match json[SRC_ID].as_str() {
+			Some(v) => v,
+			None => {
+				log::error!("没有src_id.退出..json:{}", json);
+				return Err(io::Error::new(io::ErrorKind::NotFound, "没有src_id"));
+			}
+		};
+
+		let dest_ids = if json[DEST_IDS].is_array() {
+			let mut dest_ids = Vec::with_capacity(json[DEST_IDS].len());
+			json[DEST_IDS].members().for_each(|item| dest_ids.push(item.as_str().unwrap()));
+
+			dest_ids
+		} else {
+			log::error!("没有dest_ids.退出..json:{}", json);
+			return Err(io::Error::new(io::ErrorKind::NotFound, "没有dest_ids"));
+		};
+
+
+		let msg_content_len = msg_content_code.len();
+
+		let mut msg_content_head_len: usize = 0;
+		let mut one_content_len: usize = 140;
+		let mut msg_content_seq_id: u8 = 0;
+		//整个消息的长度
+		let sms_len = if msg_content_len <= 140 {
+			1 as usize
+		} else {
+			msg_content_head_len = 6;
+			one_content_len = one_content_len - 6;
+			msg_content_seq_id = get_sequence_id(1) as u8;
+			((msg_content_len as f32) / one_content_len as f32).ceil() as usize
+		};
+
+		//长短信的话,一次性生成多条记录
+		//163是除开内容\发送号码之后所有长度加在一起 6是长短信消息头长度
+		let total_len = sms_len * (143 + dest_ids.len() * 21 + msg_content_head_len) + msg_content_len;
+
+		// 143 + msg_content_len + dest_ids.len() * 21;
+		let mut dst = BytesMut::with_capacity(total_len);
+		let mut seq_ids = Vec::with_capacity(sms_len);
+
+		for i in 0..sms_len {
+			let this_msg_content = if i == sms_len - 1 {
+				&msg_content_code[(i * one_content_len)..msg_content_code.len()]
+			} else {
+				&msg_content_code[(i * one_content_len)..((i + 1) * one_content_len)]
+			};
+
+			dst.put_u32((143 + dest_ids.len() * 21 + msg_content_head_len + this_msg_content.len()) as u32);
+			dst.put_u32(self.get_type_id(MsgType::Submit));
+			dst.put_u32(node_id);
+			let mut seq_id = (get_time() << 32) as u64 | get_sequence_id(dest_ids.len() as u32);
+			dst.put_u64(seq_id);
+
+			seq_ids.push(seq_time);
+
+			fill_bytes_zero(&mut dst, src_id, 21);  //src_id:SPNumber
+			dst.extend_from_slice(&FILL_ZERO[0..21]);//ChargeNumber
+			dst.put_u8(dest_ids.len() as u8); //UserCount
+			dest_ids.iter().for_each(|dest_id| {
+				dst.extend_from_slice("86".as_bytes());
+				fill_bytes_zero(&mut dst, dest_id, 19);
+			});  //dest_id 19位.因为+86
+			dst.extend_from_slice(corp_id[0..5].as_bytes()); //corp_id
+			fill_bytes_zero(&mut dst, service_id, 10);//Service_Id
+			dst.put_u8(1); //FeeType
+			dst.extend_from_slice("000001".as_ref()); //FeeCode
+			dst.extend_from_slice("000000".as_ref()); //GivenValue
+			dst.put_u8(0); //AgentFlag
+			dst.put_u8(0); //MorelatetoMTFlag
+			dst.put_u8(0); //Priority
+			dst.extend_from_slice(&FILL_ZERO[0..16]); //ExpireTime
+			dst.extend_from_slice(&FILL_ZERO[0..16]); //ScheduleTime
+			dst.put_u8(1); //ReportFlag
+			dst.put_u8(0); //TP_pId
+			dst.put_u8(if sms_len == 1 { 0 } else { 1 }); //tp_udhi
+			dst.put_u8(8); //Msg_Fmt
+			dst.put_u8(0); //MessageType
+			dst.put_u32((this_msg_content.len() + msg_content_head_len) as u32); //Msg_Length
+			if msg_content_head_len > 0 {
+				dst.put_u8(5);
+				dst.put_u8(0);
+				dst.put_u8(03);
+				dst.put_u8(msg_content_seq_id);
+				dst.put_u8(sms_len as u8);
+				dst.put_u8((i + 1) as u8);
+			}
+			dst.extend_from_slice(&this_msg_content[..]); //Msg_Content
+			dst.extend_from_slice(&FILL_ZERO[0..8]); //Reserve
+		}
+
+		json[SEQ_IDS] = seq_ids.into();
+
+		Ok(dst)
+	}
+	///生成登录操作的消息
+	fn encode_connect(&self, json: &mut JsonValue) -> Result<BytesMut, io::Error> {
+		let login_name = match json[LOGIN_NAME].as_str() {
+			Some(v) => v,
+			None => {
+				log::error!("没有login_name.退出..json:{}", json);
+				return Err(io::Error::new(io::ErrorKind::NotFound, "没有login_name"));
+			}
+		};
+
+		let password = match json[PASSWORD].as_str() {
+			Some(v) => v,
+			None => {
+				log::error!("没有password.退出..json:{}", json);
+				return Err(io::Error::new(io::ErrorKind::NotFound, "没有password"));
+			}
+		};
+
+		let node_id = match json[NODE_ID].as_u32() {
+			Some(v) => v,
+			None => {
+				log::error!("没有node_id.退出..json:{}", json);
+				return Err(io::Error::new(io::ErrorKind::NotFound, "没有node_id"));
+			}
+		};
+
+		//固定这个大小。
+		let mut dst = BytesMut::with_capacity(61);
+		dst.put_u32(61);
+		dst.put_u32(self.get_type_id(Connect));
+		dst.put_u32(node_id);
+		dst.put_u32(get_time());
+		dst.put_u32(get_sequence_id(1));
+		dst.put_u8(1); //Login Type 1
+
+		fill_bytes_zero(&mut dst, login_name, 16); //Login Name
+		fill_bytes_zero(&mut dst, password, 16); //Login Passowrd
+		dst.extend_from_slice(&FILL_ZERO[0..8]);//Reserve
+
+		Ok(dst)
+	}
+
+	fn encode_submit_resp(&self, status: SmsStatus, json: &mut JsonValue) -> Option<BytesMut> {
+		let seq_id = match json[SEQ_ID].as_u64() {
+			Some(v) => v,
+			None => {
+				log::error!("没有seq_id.退出..json:{}", json);
+				return None;
+			}
+		};
+
+		let node_id = match json[NODE_ID].as_u32() {
+			Some(v) => v,
+			None => {
+				log::error!("没有node_id.退出..json:{}", json);
+				return None;
+			}
+		};
+
+		let submit_status = self.get_status_id(&status);
+
+
+		let mut buf = BytesMut::with_capacity(29);
+
+		buf.put_u32(29);
+		buf.put_u32(self.get_type_id(SubmitResp));
+		buf.put_u64(seq_id);
+		buf.put_u8(submit_status as u8);
+		dst.extend_from_slice(&FILL_ZERO[0..8]); //Reserve
+
+		Some(buf)
+	}
+
+	///根据对方给的请求,处理以后的编码消息
+	fn encode_login_rep(&self, status: SmsStatus, json: &mut JsonValue) -> Option<BytesMut> {
+		let node_id = match json[NODE_ID].as_u32() {
+			Some(v) => v,
+			None => {
+				log::error!("没有node_id.退出..json:{}", json);
+				return None;
+			}
+		};
+
+		let mut dst = BytesMut::with_capacity(29);
+		dst.put_u32(29);
+		dst.put_u32(self.get_type_id(MsgType::ConnectResp));
+
+		dst.put_u32(node_id);
+		dst.put_u32(get_time());
+		dst.put_u32(get_sequence_id(1)); //seq_id
+
+		dst.put_u8(self.get_status_id(&status) as u8); //Result
+		dst.extend_from_slice(&FILL_ZERO[0..8]);//Reserve
+
+		Some(dst)
+	}
+
+	fn decode_submit(&self, buf: &mut BytesMut, node_id: u32, tp: u32) -> Result<JsonValue, io::Error> {
+		let mut json = JsonValue::new_object();
+
+		json[MSG_TYPE_U32] = tp.into();
+		json[NODE_ID] = node_id.into();
+		json[SEQ_ID] = buf.get_u64().into();
+
+		json[SRC_ID] = load_utf8_string(buf, 21).into(); //src_id 21
+		buf.advance(21); //ChargeNumber
+		let dest_len = buf.get_u8();//UserCount 1
+		//dest_ids 21
+		let mut dest_ids: Vec<String> = Vec::new();
+		for _i in 0..dest_len {
+			dest_ids.push(load_utf8_string(buf, 21));
+		}
+		json[DEST_IDS] = dest_ids.into();
+		buf.advance(65); //CorpId 5  ServiceType 10  FeeType 1 FeeValue 6 GivenValue 6 AgentFlag 1  MorelatetoMTFlag 1  Priority 1 ExpireTime 16 ScheduleTime 16 ReportFlag 1 TP_pid 1
+		let tp_udhi = buf.get_u8(); //是否长短信
+		json[TP_UDHI] = tp_udhi.into(); //TP_udhi 1
+		let msg_fmt = buf.get_u8();
+		json[MSG_FMT] = msg_fmt.into(); //Msg_Fmt 1
+
+		buf.advance(1); //MessageType 1
+		//长短信的处理 tp_udhi != 0 说明是长短信
+		decode_msg_content(buf, msg_fmt, &mut json, tp_udhi != 0)?;
+
+		Ok(json)
+	}
+
+	fn decode_submit_or_deliver_resp(&self, buf: &mut BytesMut, node_id: u32, tp: u32) -> Result<JsonValue, io::Error> {
+		let mut json = JsonValue::new_object();
+
+		json[MSG_TYPE_U32] = tp.into();
+		json[NODE_ID] = node_id.into();
+		json[SEQ_ID] = buf.get_u64().into();
+
+		json[STATUS] = buf.get_u8().into();
+
+		Ok(json)
+	}
+
+	///实际的解码连接消息
+	fn decode_connect(&self, buf: &mut BytesMut, node_id: u32, tp: u32) -> Result<JsonValue, io::Error> {
+		let mut json = JsonValue::new_object();
+		json[MSG_TYPE_U32] = tp.into();
+
+		json[NODE_ID] = node_id.into();
+		json[SEQ_ID] = buf.get_u64().into();
+		buf.advance(1); //Login Type
+		json[LOGIN_NAME] = copy_to_bytes(buf, 16).as_ref().into();//Login Name
+		json[LOGIN_NAME] = copy_to_bytes(buf, 16).as_ref().into(); //Login Passowrd
+
+		Ok(json)
+	}
+
+	fn decode_connect_resp(&self, buf: &mut BytesMut, node_id: u32, tp: u32) -> Result<JsonValue, io::Error> {
+		let mut json = JsonValue::new_object();
+
+		json[MSG_TYPE_U32] = tp.into();
+		json[NODE_ID] = node_id.into();
+		json[SEQ_ID] = buf.get_u64().into();
+
+		json[STATUS] = buf.get_u8().into();
+
+		Ok(json)
+	}
+
+	fn decode_nobody(&self, buf: &mut BytesMut, node_id: u32, tp: u32) -> Result<JsonValue, io::Error> {
+		let mut json = JsonValue::new_object();
+
+		json[MSG_TYPE_U32] = tp.into();
+		json[NODE_ID] = node_id.into();
+		json[SEQ_ID] = buf.get_u64().into();
+
+		Ok(json)
 	}
 }
 
@@ -156,23 +437,3 @@ impl Sgip {
 		}
 	}
 }
-
-impl Encoder<BytesMut> for Sgip {
-	type Error = io::Error;
-
-	fn encode(&mut self, item: BytesMut, dst: &mut BytesMut) -> Result<(), Self::Error> {
-		dst.extend_from_slice(&*item);
-
-		Ok(())
-	}
-}
-
-impl Decoder for Sgip {
-	type Item = JsonValue;
-	type Error = io::Error;
-
-	fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
-		unimplemented!()
-	}
-}
-

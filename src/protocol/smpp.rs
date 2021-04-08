@@ -5,27 +5,27 @@ use tokio::io;
 
 ///Sgip协议的处理
 #[derive(Debug, Default)]
-pub struct Smgp {
+pub struct Smpp {
 	version:u32,
 	length_codec: LengthDelimitedCodec,
 }
 
 
-impl ProtocolImpl for Smgp {
+impl ProtocolImpl for Smpp {
 	fn get_framed(&mut self, buf: &mut BytesMut) -> io::Result<Option<BytesMut>>  {
 		self.length_codec.decode(buf)
 	}
 }
 
-impl Clone for Smgp {
+impl Clone for Smpp {
 	fn clone(&self) -> Self {
-		Smgp::new()
+		Smpp::new()
 	}
 }
 
-impl Smgp {
+impl Smpp {
 	pub fn new() -> Self {
-		Smgp {
+		Smpp {
 			version: 0,
 			length_codec: LengthDelimitedCodec::builder()
 				.length_field_offset(0)

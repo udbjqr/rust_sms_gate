@@ -1,6 +1,6 @@
 #![allow(unused)]
 
-use sms_gate::protocol::{Cmpp48, Protocol, SmsStatus};
+use sms_gate::protocol::{Cmpp48, ProtocolImpl, SmsStatus};
 use tokio_util::codec::Decoder;
 use json::JsonValue;
 use std::io::Error;

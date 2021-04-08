@@ -1,8 +1,7 @@
-use crate::global::{FILL_ZERO, ISMG_ID, get_sequence_id};
 use core::result;
 use std::fmt::{Display, Formatter};
 
-use bytes::{BytesMut, Buf, Bytes};
+use bytes::{BytesMut, };
 use json::JsonValue;
 use tokio::io;
 
@@ -11,155 +10,290 @@ pub use crate::protocol::msg_type::SmsStatus;
 
 pub use self::cmpp48::Cmpp48;
 pub use self::sgip::Sgip;
-use chrono::{Local, Datelike, Timelike};
-use crate::protocol::names::{LONG_SMS_TOTAL, LONG_SMS_NOW_NUMBER, MSG_CONTENT};
-use encoding::all::UTF_16BE;
-use encoding::{Encoding, DecoderTrap};
+use crate::protocol::names::{MSG_TYPE_U32};
+use tokio_util::codec::{Encoder, Decoder};
+use crate::protocol::cmpp32::Cmpp32;
+use futures::io::Error;
+use crate::protocol::smgp::Smgp;
+use crate::protocol::Protocol::SMGP;
+use crate::protocol::smpp::Smpp;
+pub use crate::protocol::implements::ProtocolImpl;
 
 ///协议的对应部分。用来编码和解码
-
 mod cmpp48;
 mod smgp;
 mod sgip;
 mod msg_type;
 pub mod names;
-pub(crate) mod cmpp32;
+pub mod cmpp32;
+pub mod implements;
+mod smpp;
 
-#[derive(Debug, Copy, Clone)]
-pub enum ProtocolType {
-	CMPP,
-	SMGP,
-	SGIP,
-	SMPP,
-	UNKNOWN,
+#[derive(Debug, Clone)]
+pub enum Protocol {
+	CMPP48(Cmpp48),
+	CMPP32(Cmpp32),
+	SMGP(Smgp),
+	SGIP(Sgip),
+	SMPP(Smpp),
+	None,
 }
 
-impl From<&str> for ProtocolType {
-	fn from(id: &str) -> Self {
-		match id {
-			"CMPP" => ProtocolType::CMPP,
-			"SMGP" => ProtocolType::SMGP,
-			"SGIP" => ProtocolType::SGIP,
-			"SMPP" => ProtocolType::SMPP,
-			_ => ProtocolType::UNKNOWN
+impl From<&str> for Protocol {
+	fn from(name: &str) -> Self {
+		//指定某一个协议进行初始化的操作.
+		match name[0..4].to_uppercase().as_str() {
+			"CMPP" => Protocol::CMPP48(Cmpp48::new()),
+			"SMGP" => Protocol::SMGP(Smgp::new()),
+			"SGIP" => Protocol::SGIP(Sgip::new()),
+			"SMPP" => Protocol::SMPP(Smpp::new()),
+			_ => Protocol::None
 		}
 	}
 }
 
-impl Display for ProtocolType {
+
+impl Protocol {
+	fn parse(&self) -> &str {
+		match self {
+			Protocol::CMPP48(_) => "CMPP",
+			Protocol::CMPP32(_) => "CMPP",
+			SMGP(_) => "SMGP",
+			Protocol::SGIP(_) => "SGIP",
+			Protocol::SMPP(_) => "SMPP",
+			Protocol::None => "None"
+		}
+	}
+
+	///根据给定的版本号.给出相应的处理的对象.
+	pub fn match_version(&self, version: u32) -> Self {
+		let name = self.parse();
+
+		Protocol::get_protocol(name, version)
+	}
+
+	///给定一个版本号。返回与版本号相对应的操作类型
+	pub fn get_protocol(name: &str, version: u32) -> Protocol {
+		match (name, version) {
+			("CMPP", 48) => Protocol::CMPP48(Cmpp48::new()),
+			("CMPP", 32) => Protocol::CMPP32(Cmpp32::new()),
+			("SGIP", _) => Protocol::SGIP(Sgip::new()),
+			("SMGP", _) => Protocol::SMGP(Smgp::new()),
+			("SMPP", _) => Protocol::SMPP(Smpp::new()),
+			_ => {
+				log::error!("未了解的协议名称和版本号.name:{},version:{}", name, version);
+				Protocol::CMPP48(Cmpp48::new())
+			}
+		}
+	}
+
+	pub fn is(&self, version: u32) -> bool {
+		match self {
+			Protocol::CMPP48(_) => version == 48,
+			Protocol::CMPP32(_) => version == 32,
+			SMGP(_) => true,
+			Protocol::SGIP(_) => true,
+			Protocol::SMPP(_) => true,
+			Protocol::None => false
+		}
+	}
+
+	pub fn get_status_enum(&self, v: u32) -> SmsStatus {
+		match self {
+			Protocol::CMPP48(obj) => obj.get_status_enum(v),
+			Protocol::CMPP32(obj) => obj.get_status_enum(v),
+			Protocol::SMGP(obj) => obj.get_status_enum(v),
+			Protocol::SGIP(obj) => obj.get_status_enum(v),
+			Protocol::SMPP(obj) => obj.get_status_enum(v),
+			Protocol::None => {
+				log::error!("当前操作不可用。");
+				SmsStatus::UNKNOWN
+			}
+		}
+	}
+
+	///生成实体过来.这里应该是由实体发送来的消息.其他的不在这里。
+	pub fn encode_message(&self, json: &mut JsonValue) -> Result<BytesMut, Error> {
+		match self {
+			Protocol::CMPP48(obj) => match json[MSG_TYPE_U32].as_str() {
+				None => Err(Error::new(io::ErrorKind::NotFound, format!("没有找到指定的type.json:{}", json))),
+				Some(msg_type) => {
+					match msg_type.into() {
+						MsgType::Connect => obj.encode_connect(json),
+						MsgType::Submit => obj.encode_submit(json),
+						MsgType::Deliver => obj.encode_deliver(json),
+						MsgType::Report => obj.encode_report(json),
+						MsgType::ActiveTest => obj.encode_active_test(json),
+						_ => Err(io::Error::new(io::ErrorKind::Other, "还未实现")),
+					}
+				}
+			}
+			Protocol::CMPP32(obj) => match json[MSG_TYPE_U32].as_str() {
+				None => Err(Error::new(io::ErrorKind::NotFound, format!("没有找到指定的type.json:{}", json))),
+				Some(msg_type) => {
+					match msg_type.into() {
+						MsgType::Connect => obj.encode_connect(json),
+						MsgType::Submit => obj.encode_submit(json),
+						MsgType::Deliver => obj.encode_deliver(json),
+						MsgType::Report => obj.encode_report(json),
+						MsgType::ActiveTest => obj.encode_active_test(json),
+						_ => Err(io::Error::new(io::ErrorKind::Other, "还未实现")),
+					}
+				}
+			}
+			Protocol::SMGP(obj) => match json[MSG_TYPE_U32].as_str() {
+				None => Err(Error::new(io::ErrorKind::NotFound, format!("没有找到指定的type.json:{}", json))),
+				Some(msg_type) => {
+					match msg_type.into() {
+						MsgType::Connect => obj.encode_connect(json),
+						MsgType::Submit => obj.encode_submit(json),
+						MsgType::Deliver => obj.encode_deliver(json),
+						MsgType::Report => obj.encode_report(json),
+						MsgType::ActiveTest => obj.encode_active_test(json),
+						_ => Err(io::Error::new(io::ErrorKind::Other, "还未实现")),
+					}
+				}
+			}
+			Protocol::SGIP(obj) => match json[MSG_TYPE_U32].as_str() {
+				None => Err(Error::new(io::ErrorKind::NotFound, format!("没有找到指定的type.json:{}", json))),
+				Some(msg_type) => {
+					match msg_type.into() {
+						MsgType::Connect => obj.encode_connect(json),
+						MsgType::Submit => obj.encode_submit(json),
+						MsgType::Deliver => obj.encode_deliver(json),
+						MsgType::Report => obj.encode_report(json),
+						MsgType::ActiveTest => obj.encode_active_test(json),
+						_ => Err(io::Error::new(io::ErrorKind::Other, "还未实现")),
+					}
+				}
+			}
+			Protocol::SMPP(obj) => match json[MSG_TYPE_U32].as_str() {
+				None => Err(Error::new(io::ErrorKind::NotFound, format!("没有找到指定的type.json:{}", json))),
+				Some(msg_type) => {
+					match msg_type.into() {
+						MsgType::Connect => obj.encode_connect(json),
+						MsgType::Submit => obj.encode_submit(json),
+						MsgType::Deliver => obj.encode_deliver(json),
+						MsgType::Report => obj.encode_report(json),
+						MsgType::ActiveTest => obj.encode_active_test(json),
+						_ => Err(io::Error::new(io::ErrorKind::Other, "还未实现")),
+					}
+				}
+			}
+			Protocol::None => {
+				log::error!("当前操作不可用。");
+				Err(io::Error::new(io::ErrorKind::Other, "还未实现"))
+			}
+		}
+	}
+
+	///为收到的业务消息生成一个回执消息,不包括登录.当本身就是回执消息的时候返回None.
+	pub fn encode_receipt(&self, status: SmsStatus, json: &mut JsonValue) -> Option<BytesMut> {
+		match self {
+			Protocol::CMPP48(obj) => {
+				match obj.get_type_enum(json[MSG_TYPE_U32].as_u32().unwrap()) {
+					MsgType::Connect => obj.encode_login_rep(status, json),
+					MsgType::Submit => obj.encode_submit_resp(status, json),
+					MsgType::Deliver => obj.encode_deliver_resp(status, json),
+					MsgType::Report => obj.encode_report_resp(status, json),
+					MsgType::ActiveTest => obj.encode_active_test_resp(status, json),
+					_ => {
+						log::error!("未生成的返回对象.json:{}", json);
+						None
+					}
+				}
+			}
+			Protocol::CMPP32(obj) => {
+				match obj.get_type_enum(json[MSG_TYPE_U32].as_u32().unwrap()) {
+					MsgType::Connect => obj.encode_login_rep(status, json),
+					MsgType::Submit => obj.encode_submit_resp(status, json),
+					MsgType::Deliver => obj.encode_deliver_resp(status, json),
+					MsgType::Report => obj.encode_report_resp(status, json),
+					MsgType::ActiveTest => obj.encode_active_test_resp(status, json),
+					_ => {
+						log::error!("未生成的返回对象.json:{}", json);
+						None
+					}
+				}
+			}
+			Protocol::SMGP(obj) => {
+				match obj.get_type_enum(json[MSG_TYPE_U32].as_u32().unwrap()) {
+					MsgType::Connect => obj.encode_login_rep(status, json),
+					MsgType::Submit => obj.encode_submit_resp(status, json),
+					MsgType::Deliver => obj.encode_deliver_resp(status, json),
+					MsgType::Report => obj.encode_report_resp(status, json),
+					MsgType::ActiveTest => obj.encode_active_test_resp(status, json),
+					_ => {
+						log::error!("未生成的返回对象.json:{}", json);
+						None
+					}
+				}
+			}
+			Protocol::SGIP(obj) => {
+				match obj.get_type_enum(json[MSG_TYPE_U32].as_u32().unwrap()) {
+					MsgType::Connect => obj.encode_login_rep(status, json),
+					MsgType::Submit => obj.encode_submit_resp(status, json),
+					MsgType::Deliver => obj.encode_deliver_resp(status, json),
+					MsgType::Report => obj.encode_report_resp(status, json),
+					MsgType::ActiveTest => obj.encode_active_test_resp(status, json),
+					_ => {
+						log::error!("未生成的返回对象.json:{}", json);
+						None
+					}
+				}
+			}
+			Protocol::SMPP(obj) => {
+				match obj.get_type_enum(json[MSG_TYPE_U32].as_u32().unwrap()) {
+					MsgType::Connect => obj.encode_login_rep(status, json),
+					MsgType::Submit => obj.encode_submit_resp(status, json),
+					MsgType::Deliver => obj.encode_deliver_resp(status, json),
+					MsgType::Report => obj.encode_report_resp(status, json),
+					MsgType::ActiveTest => obj.encode_active_test_resp(status, json),
+					_ => {
+						log::error!("未生成的返回对象.json:{}", json);
+						None
+					}
+				}
+			}
+			Protocol::None => {
+				log::error!("当前操作不可用。");
+				None
+			}
+		}
+	}
+}
+
+impl Display for Protocol {
 	fn fmt(&self, f: &mut Formatter<'_>) -> result::Result<(), std::fmt::Error> {
 		write!(f, "{:?}", self)
 	}
 }
 
-pub trait Protocol: Send + Sync {
-	fn get_version(&self) -> u32;
-	///为收到的消息生成一个回执消息.当本身就是回执消息的时候返回None.
-	fn encode_receipt(&self, status: SmsStatus<()>, json: &mut JsonValue) -> Option<BytesMut>;
-	///生成实体过来.这里应该是只会有单独的几个消息.其他的不应该在这里。
-	fn encode_from_entity_message(&self, json: &JsonValue) -> Result<(BytesMut, Vec<u32>), io::Error>;
+impl Encoder<BytesMut> for Protocol {
+	type Error = io::Error;
 
-	fn encode_login_msg(&self, user_name: &str, password: &str) -> Result<BytesMut, io::Error>;
-	///根据对方给的请求,处理以后的编码消息
-	fn encode_login_rep(&self, status: &SmsStatus<JsonValue>) -> BytesMut {
-		match status {
-			SmsStatus::Success(json) => self.login_rep(self.get_status_id(status), json),
-			SmsStatus::AddError(json) => self.login_rep(self.get_status_id(status), json),
-			SmsStatus::AuthError(json) => self.login_rep(self.get_status_id(status), json),
-			SmsStatus::VersionError(json) => self.login_rep(self.get_status_id(status), json),
-			SmsStatus::LoginOtherError(json) => self.login_rep(self.get_status_id(status), json),
-			SmsStatus::TrafficRestrictions(json) => self.login_rep(self.get_status_id(status), json),
-			SmsStatus::MessageError(json) => self.login_rep(self.get_status_id(status), json),
+	fn encode(&mut self, item: BytesMut, dst: &mut BytesMut) -> Result<(), Self::Error> {
+		dst.extend_from_slice(&item);
+
+		Ok(())
+	}
+}
+
+impl Decoder for Protocol {
+	type Item = JsonValue;
+	type Error = io::Error;
+
+	fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
+		match self {
+			Protocol::CMPP48(obj) => obj.decode_read_msg(src),
+			Protocol::CMPP32(obj) => obj.decode_read_msg(src),
+			Protocol::SMGP(obj) => obj.decode_read_msg(src),
+			Protocol::SGIP(obj) => obj.decode_read_msg(src),
+			Protocol::SMPP(obj) => obj.decode_read_msg(src),
+			Protocol::None => {
+				log::error!("当前操作不可用。");
+				Ok(None)
+			}
 		}
 	}
-
-	fn login_rep(&self, status: u32, json: &JsonValue) -> BytesMut;
-
-	fn decode_read_msg(&self, buf: &mut BytesMut) -> io::Result<Option<JsonValue>>;
-
-	fn get_type_id(&self, t: MsgType) -> u32;
-	fn get_type_enum(&self, v: u32) -> MsgType;
-	///通过给出的状态值.返回对应发给协议对端的u32值.
-	fn get_status_id<T>(&self, status: &SmsStatus<T>) -> u32;
-	fn get_status_enum<T>(&self, v: u32, json: T) -> SmsStatus<T>;
-}
-
-///向缓冲写入指定长度数据.如果数据不够长.使用0进行填充.
-pub fn fill_bytes_zero(dest: &mut BytesMut, slice: &str, len: usize) {
-	if slice.len() >= len {
-		dest.extend_from_slice(slice[0..len].as_ref());
-	} else {
-		dest.extend_from_slice(slice.as_ref());
-		dest.extend_from_slice(&FILL_ZERO[0..len - slice.len()]);
-	}
-}
-
-///读一个长度的utf-8 字符编码.确保是utf-8.并且当前值是有效值.
-pub fn load_utf8_string(buf: &mut BytesMut, len: usize) -> String {
-	unsafe {
-		String::from_utf8_unchecked(Vec::from(copy_to_bytes(buf, len).as_ref())).trim_end_matches(char::from(0)).to_owned()
-	}
-}
-
-///读一个长度字串.做一个异常的保护.
-pub fn copy_to_bytes(buf: &mut BytesMut, len: usize) -> Bytes {
-	if buf.len() > len {
-		buf.split_to(len).freeze()
-	} else {
-		log::error!("得到消息出现错误.消息没有足够长度.可用长度:{}.现有长度{}", buf.len(), len);
-		Bytes::new()
-	}
-}
-
-///返回一个msg_id.目前在Cmpp协议里面使用
-pub fn get_msg_id() -> u64 {
-	let date = Local::now();
-	let mut result: u64 = date.month() as u64;
-	result = result << 5 | (date.day() & 0x1F) as u64;
-	result = result << 5 | (date.hour() & 0x1F) as u64;
-	result = result << 6 | (date.minute() & 0x3F) as u64;
-	result = result << 6 | (date.second() & 0x3F) as u64;
-	result = result << 22 | *ISMG_ID as u64;
-
-	result << 16 | (get_sequence_id(1) & 0xff) as u64
-}
-
-///处理短信内容的通用方法.会处理msg_length和msg_content.需要这两个是连续的.
-pub fn decode_msg_content(buf: &mut BytesMut, msg_fmt: u8, json: &mut JsonValue, is_long_sms: bool) -> Result<(), io::Error> {
-	let mut msg_content_len = buf.get_u8(); //Msg_Length	1
-
-	if is_long_sms {
-		let head_len = buf.get_u8(); //接下来的长度
-		buf.advance((head_len - 2) as usize); //跳过对应的长度
-		json[LONG_SMS_TOTAL] = buf.get_u8().into();
-		json[LONG_SMS_NOW_NUMBER] = buf.get_u8().into();
-
-		if msg_content_len > (head_len + 1) {
-			msg_content_len = msg_content_len - head_len - 1;
-		} else {
-			log::warn!("消息结构出错.整体消息长度小于消息头长度.");
-			return Err(io::Error::new(io::ErrorKind::Other, "消息结构出错."));
-		}
-	}
-
-	let msg_content = copy_to_bytes(buf, msg_content_len as usize);
-	//根据字符集转换.
-	let msg_content = match msg_fmt {
-		8 => match UTF_16BE.decode(&msg_content, DecoderTrap::Strict) {
-			Ok(v) => v,
-			Err(e) => return Err(io::Error::new(io::ErrorKind::Other, e))
-		}
-		0 => match std::str::from_utf8(&msg_content) {
-			Ok(v) => v.to_owned(),
-			Err(e) => return Err(io::Error::new(io::ErrorKind::Other, e))
-		},
-		_ => {
-			log::warn!("未处理的字符集类型.跳过.msg_fmt:{}", msg_fmt);
-			return Err(io::Error::new(io::ErrorKind::Other, "未处理的字符集类型.跳过"));
-		}
-	};
-
-	json[MSG_CONTENT] = msg_content.into();
-
-	Ok(())
 }

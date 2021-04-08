@@ -5,7 +5,7 @@ use tokio::net::TcpListener;
 use crate::entity::channel::Channel;
 use crate::get_runtime;
 use crate::global::load_config_file;
-use crate::protocol::{Cmpp48, ProtocolType, Sgip};
+use crate::protocol::Protocol;
 
 ///服务器管理类。在某些端口进行开放。
 #[derive(Debug, Default)]
@@ -27,7 +27,7 @@ impl ServersManager {
 				}
 			};
 
-			let server_type: ProtocolType = match item["server_type"].as_str() {
+			let server_type: Protocol = match item["server_type"].as_str() {
 				Some(h) => h.into(),
 				None => {
 					return Err(io::Error::new(io::ErrorKind::NotFound, "server_type为空。不能使用"));
@@ -46,7 +46,7 @@ impl ServersManager {
 }
 
 ///启动一个服务等待连接
-async fn start_service(host: String, server_type: ProtocolType) {
+async fn start_service(host: String, server_type: Protocol) {
 	let listener = match TcpListener::bind(host.as_str()).await {
 		Ok(l) => l,
 		Err(e) => {
@@ -66,30 +66,10 @@ async fn start_service(host: String, server_type: ProtocolType) {
 				return;
 			}
 		};
-
+		let server_type = server_type.clone();
 		get_runtime().spawn(async move {
-			//TODO 这里需要根据不同的类型。给不同的数据
-			match server_type {
-				ProtocolType::CMPP => {
-					let mut channel = Channel::new(Cmpp48::new(),  true);
-					channel.start_server(socket).await;
-				}
-				ProtocolType::SMGP => {
-					let mut channel = Channel::new(Cmpp48::new(),  true);
-					channel.start_server(socket).await;
-				}
-				ProtocolType::SGIP => {
-					let mut channel = Channel::new(Sgip::new(),  true);
-					channel.start_server(socket).await;
-				}
-				ProtocolType::SMPP => {
-					let mut channel = Channel::new(Cmpp48::new(),  true);
-					channel.start_server(socket).await;
-				}
-				ProtocolType::UNKNOWN => {
-					error!("协议类型给定错误。");
-				}
-			};
+			let mut channel = Channel::new(server_type, true);
+			channel.start_server(socket).await;
 		});
 	}
 }

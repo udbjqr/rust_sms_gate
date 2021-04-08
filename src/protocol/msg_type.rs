@@ -1,4 +1,4 @@
-use std::fmt::{Display, Debug};
+use std::fmt::{Debug};
 use std::fmt;
 
 #[derive(Debug, Clone, Copy)]
@@ -37,7 +37,7 @@ pub enum MsgType {
 	PushMoRouteUpdateResp,
 	GetMoRoute,
 	GetMoRouteResp,
-	UnKnow,
+	UNKNOWN,
 }
 
 impl From<&str> for MsgType {
@@ -77,7 +77,7 @@ impl From<&str> for MsgType {
 			"PushMoRouteUpdateResp" => MsgType::PushMoRouteUpdateResp,
 			"GetMoRoute" => MsgType::GetMoRoute,
 			"GetMoRouteResp" => MsgType::GetMoRouteResp,
-			_ => MsgType::UnKnow,
+			_ => MsgType::UNKNOWN,
 		}
 	}
 }
@@ -119,43 +119,75 @@ impl Into<&str> for MsgType {
 			MsgType::PushMoRouteUpdateResp => "PushMoRouteUpdateResp",
 			MsgType::GetMoRoute => "GetMoRoute",
 			MsgType::GetMoRouteResp => "GetMoRouteResp",
-			MsgType::UnKnow => "UnKnow",
+			MsgType::UNKNOWN => "UnKnow",
 		}
 	}
 }
 
 ///协议的错误回复
 #[derive(Debug, Clone, Copy)]
-pub enum SmsStatus<T> {
+pub enum SmsStatus {
 	///成功。
-	Success(T),
+	Success,
 	///消息结构错
-	MessageError(T),
+	MessageError,
 	///非法源地址
-	AddError(T),
+	AddError,
 	///认证错
-	AuthError(T),
+	AuthError,
 	///版本太高
-	VersionError(T),
+	VersionError,
 	///登录时的其他错误
-	LoginOtherError(T),
+	LoginOtherError,
 	///流量限制
-	TrafficRestrictions(T),
+	TrafficRestrictions,
+	UNKNOWN,
 }
 
-impl<T> std::error::Error for SmsStatus<T> where T: Display + Debug {}
+impl From<&'static str> for SmsStatus {
+	fn from(name: &'static str) -> Self {
+		match name {
+			"Success" => SmsStatus::Success,
+			"MessageError" => SmsStatus::MessageError,
+			"AddError" => SmsStatus::AddError,
+			"AuthError" => SmsStatus::AuthError,
+			"VersionError" => SmsStatus::VersionError,
+			"LoginOtherError" => SmsStatus::LoginOtherError,
+			"TrafficRestrictions" => SmsStatus::TrafficRestrictions,
+			_ => SmsStatus::UNKNOWN
+		}
+	}
+}
 
-impl<T> fmt::Display for SmsStatus<T>
-	where T: Display {
+
+impl Into<&'static str> for SmsStatus {
+	fn into(self) -> &'static str {
+		match self {
+			SmsStatus::Success => "Success",
+			SmsStatus::MessageError => "MessageError",
+			SmsStatus::AddError => "AddError",
+			SmsStatus::AuthError => "AuthError",
+			SmsStatus::VersionError => "VersionError",
+			SmsStatus::LoginOtherError => "LoginOtherError",
+			SmsStatus::TrafficRestrictions => "TrafficRestrictions",
+			SmsStatus::UNKNOWN => "UNKNOWN",
+		}
+	}
+}
+
+impl std::error::Error for SmsStatus {}
+
+impl fmt::Display for SmsStatus {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {
-			SmsStatus::Success(v) => write!(f, "成功,{}", v),
-			SmsStatus::MessageError(v) => write!(f, "登录,消息结构错,{}", v),
-			SmsStatus::AddError(v) => write!(f, "登录,非法源地址,{}", v),
-			SmsStatus::AuthError(v) => write!(f, "登录,认证错,{}", v),
-			SmsStatus::VersionError(v) => write!(f, "登录,版本太高,{}", v),
-			SmsStatus::LoginOtherError(v) => write!(f, "登录,其他错误,{}", v),
-			SmsStatus::TrafficRestrictions(v) => write!(f, "发送.流量限制,{}", v),
+			SmsStatus::Success => write!(f, "成功"),
+			SmsStatus::MessageError => write!(f, "登录,消息结构错"),
+			SmsStatus::AddError => write!(f, "登录,非法源地址,"),
+			SmsStatus::AuthError => write!(f, "登录,认证错,"),
+			SmsStatus::VersionError => write!(f, "登录,版本太高,"),
+			SmsStatus::LoginOtherError => write!(f, "登录,其他错误"),
+			SmsStatus::TrafficRestrictions => write!(f, "发送.流量限制"),
+			SmsStatus::UNKNOWN => write!(f, "未知的错误."),
 			// _ => write!(f, "其他错误,这里没有更新。"),
 		}
 	}

@@ -1,13 +1,12 @@
 pub static SEQ_ID: &'static str = "seq_id";
 pub static SEQ_IDS: &'static str = "seq_ids";
-///SGIP协议增加的部分
-pub static SEQ_ID_HEAD: &'static str = "seq_id_head";
 pub static AUTHENTICATOR: &'static str = "authenticator";
 pub static VERSION: &'static str = "version";
-pub static MSG_TYPE: &'static str = "msg_type";
-pub static MSG_TYPE_STR: &'static str = "msg_type_str";
+pub static MSG_TYPE_U32: &'static str = "m_t";
+pub static MSG_TYPE_STR: &'static str = "msg_type";
 pub static RECEIVE_TIME: &'static str = "receive_time";
 pub static ENTITY_ID: &'static str = "entity_id";
+pub static CHANNEL_ID: &'static str = "channel_id";
 pub static WAIT_RECEIPT: &'static str = "wait_receipt";
 pub static STATUS: &'static str = "status";
 pub static USER_ID: &'static str = "user_id";
@@ -17,6 +16,11 @@ pub static IS_REPORT: &'static str = "is_report";
 pub static RESULT: &'static str = "result";
 pub static MSG_CONTENT: &'static str = "msg_content";
 pub static SERVICE_ID: &'static str = "service_id";
+pub static NODE_ID: &'static str = "node_id";
+pub static SEQ_TIME: &'static str = "seq_time";
+pub static PASSWORD: &'static str = "password";
+pub static ADDRESS: &'static str = "address";
+pub static LOGIN_NAME: &'static str = "login_name";
 pub static STAT: &'static str = "stat";
 pub static SUBMIT_TIME: &'static str = "submit_time";
 pub static SMSC_SEQUENCE: &'static str = "smsc_sequence";
@@ -35,4 +39,6 @@ pub static LONG_SMS_TOTAL: &'static str = "l_s_total";
 ///长短信当前第几条
 pub static LONG_SMS_NOW_NUMBER: &'static str = "l_s_n_number";
 pub static MANAGER_TYPE: &'static str = "manager_type";
+///消息优先级
+pub static IS_PRIORITY: &'static str = "is_priority";
 pub static ID: &'static str = "id";

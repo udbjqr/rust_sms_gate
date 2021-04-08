@@ -9,6 +9,7 @@ use crate::entity::{ChannelStates, Entity, start_entity};
 use crate::get_runtime;
 use crate::protocol::{SmsStatus, Protocol};
 use crate::protocol::names::VERSION;
+use std::net::{Ipv4Addr, IpAddr};
 
 #[derive(Debug)]
 pub struct CustomEntity {
@@ -17,10 +18,12 @@ pub struct CustomEntity {
 	desc: String,
 	login_name: String,
 	password: String,
-	allowed_addr: Vec<String>,
+	allowed_addr: String,
 	read_limit: u32,
 	write_limit: u32,
 	max_channel_number: usize,
+	service_id: String,
+	node_id: u32,
 	channels: Arc<RwLock<Vec<ChannelStates>>>,
 	config: JsonValue,
 	accumulator: AtomicU64,
@@ -31,10 +34,12 @@ pub struct CustomEntity {
 impl CustomEntity {
 	pub fn new(id: u32,
 	           name: String,
+	           service_id: String,
+	           node_id: u32,
 	           desc: String,
 	           login_name: String,
 	           password: String,
-	           allowed_addr: Vec<String>,
+	           allowed_addr: String,
 	           read_limit: u32,
 	           write_limit: u32,
 	           max_channel_number: usize,
@@ -50,6 +55,8 @@ impl CustomEntity {
 		CustomEntity {
 			id,
 			name,
+			service_id,
+			node_id,
 			desc,
 			login_name,
 			password,
@@ -74,7 +81,7 @@ impl CustomEntity {
 
 		log::info!("通道{},,开始启动处理消息.", self.name);
 		//这里开始自己的消息处理
-		get_runtime().spawn(start_entity(manage_to_entity_rx, channel_to_entity_rx, self.channels.clone(), self.id));
+		get_runtime().spawn(start_entity(manage_to_entity_rx, channel_to_entity_rx, self.channels.clone(), self.id, self.service_id.clone(), self.node_id));
 
 		self.channel_to_entity_tx = Some(channel_to_entity_tx);
 
@@ -84,14 +91,14 @@ impl CustomEntity {
 
 #[async_trait]
 impl Entity for CustomEntity {
-	async fn login_attach(&mut self, json: JsonValue) -> (usize, SmsStatus<JsonValue>, u32, u32, Option<mpsc::Receiver<JsonValue>>, Option<mpsc::Receiver<JsonValue>>, Option<mpsc::Sender<JsonValue>>) {
+	async fn login_attach(&mut self) -> (usize, SmsStatus, u32, u32, Option<mpsc::Receiver<JsonValue>>, Option<mpsc::Receiver<JsonValue>>, Option<mpsc::Sender<JsonValue>>) {
 		//这里已经开了锁。如果下面执行时间有点长。就需要注意。
 		let mut channels = self.channels.write().await;
 		let index = channels.iter().rposition(|i| i.is_active == false);
 
 		if index.is_none() {
 			log::warn!("当前已经满。不再继续增加。entity_id:{}", self.id);
-			return (0, SmsStatus::LoginOtherError(json), 0, 0, None, None, None);
+			return (0, SmsStatus::LoginOtherError, 0, 0, None, None, None);
 		}
 
 		let index = index.unwrap();
@@ -100,8 +107,6 @@ impl Entity for CustomEntity {
 		//通过后进行附加上去的动作。
 		let (entity_to_channel_priority_tx, entity_to_channel_priority_rx) = mpsc::channel::<JsonValue>(5);
 		let (entity_to_channel_common_tx, entity_to_channel_common_rx) = mpsc::channel::<JsonValue>(5);
-
-
 		let channel_to_entity_tx = self.channel_to_entity_tx.as_ref().unwrap().clone();
 
 		item.is_active = true;
@@ -110,7 +115,7 @@ impl Entity for CustomEntity {
 		item.entity_to_channel_common_tx = Some(entity_to_channel_common_tx);
 
 		let msg = json::object! {
-			manager_type:"create",
+			manager_type : "create",
 			entity_id : self.id,
 			channel_id : index,
 		};
@@ -119,7 +124,7 @@ impl Entity for CustomEntity {
 			log::error!("发送消息出现异常。e:{}", e);
 		}
 
-		(index, SmsStatus::Success(json), self.read_limit, self.write_limit, Some(entity_to_channel_priority_rx), Some(entity_to_channel_common_rx), Some(channel_to_entity_tx))
+		(index, SmsStatus::Success, self.read_limit, self.write_limit, Some(entity_to_channel_priority_rx), Some(entity_to_channel_common_rx), Some(channel_to_entity_tx))
 	}
 
 	fn get_id(&self) -> u32 {
@@ -129,24 +134,61 @@ impl Entity for CustomEntity {
 	fn get_channels(&self) -> Arc<RwLock<Vec<ChannelStates>>> {
 		self.channels.clone()
 	}
+
+	fn get_allow_ips(&self) -> &str {
+		self.allowed_addr.as_str()
+	}
 }
 
 
-pub fn check_custom_login<T>(json: &JsonValue, _entity: &mut Box<(dyn Entity + 'static)>, protocol: &T) -> Option<SmsStatus<JsonValue>>
-	where T: Protocol {
-	//TODO 进行地址允许判断
+pub fn check_custom_login(json: &JsonValue, entity: &mut Box<(dyn Entity + 'static)>, protocol: &Protocol, ip_addr: IpAddr) -> Option<(SmsStatus, JsonValue)> {
+	//进行地址允许判断
+	if !check_addr_range(entity.get_allow_ips(), ip_addr) {
+		return Some((SmsStatus::AddError, json.clone()));
+	}
+
+
 	//TODO 进行登录判断。
 	//TODO 进行密码检验。
 
 	//进行版本检查
 	if let Some(version) = json[VERSION].as_u32() {
-		if version != protocol.get_version() {
-			return Some(SmsStatus::VersionError(json.clone()));
+		if protocol.is(version) {
+			return Some((SmsStatus::VersionError, json.clone()));
 		}
 	} else {
 		log::error!("附加至CustomEntity通道异常。json里面没有version。。json:{}", json);
-		return Some(SmsStatus::LoginOtherError(json.clone()));
+		return Some((SmsStatus::LoginOtherError, json.clone()));
 	}
 
 	None
+}
+
+
+///检查ip地址是否在允许的范围内。true 在。false 不在
+fn check_addr_range(allow_ips: &str, now_ip: IpAddr) -> bool {
+	//ipv6目前不处理。
+	let ip_v = match now_ip {
+		IpAddr::V4(ip) => {
+			ip.octets()
+		}
+		IpAddr::V6(_) => {
+			return false;
+		}
+	};
+
+	allow_ips.split(",").find(|addr| {
+		if let Ok(addr) = addr.parse::<Ipv4Addr>() {
+			let v = addr.octets();
+			let mut found = true;
+			for ind in 0..v.len() {
+				found = v[ind] == ip_v[ind] || v[ind] == 0;
+				if !found { return false; }
+			}
+
+			found
+		} else {
+			false
+		}
+	}).is_some()
 }
