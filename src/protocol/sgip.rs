@@ -83,7 +83,7 @@ impl ProtocolImpl for Sgip {
 			SmsStatus::AddError => 2,
 			SmsStatus::AuthError => 1,
 			SmsStatus::VersionError => 4,
-			SmsStatus::TrafficRestrictions => 8,
+			SmsStatus::TrafficRestrictions => 101,
 			SmsStatus::LoginOtherError => 5,
 			SmsStatus::UNKNOWN => 999,
 		}
@@ -96,7 +96,7 @@ impl ProtocolImpl for Sgip {
 			2 => SmsStatus::AddError,
 			1 => SmsStatus::AuthError,
 			4 => SmsStatus::VersionError,
-			8 => SmsStatus::TrafficRestrictions,
+			101 => SmsStatus::TrafficRestrictions,
 			5 => SmsStatus::LoginOtherError,
 			_ => { SmsStatus::LoginOtherError }
 		}
