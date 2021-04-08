@@ -11,7 +11,7 @@ use crate::global::FILL_ZERO;
 use crate::protocol::msg_type::MsgType::{Connect, SubmitResp};
 use tokio::io::Error;
 use crate::protocol::msg_type::SmsStatus;
-use crate::protocol::names::{SEQ_ID, AUTHENTICATOR, VERSION, STATUS, MSG_TYPE_U32, USER_ID, MSG_CONTENT, MSG_ID, SERVICE_ID, TP_UDHI, SP_ID, VALID_TIME, AT_TIME, SRC_ID, MSG_FMT, DEST_IDS, RESULT, DEST_ID, STAT, SUBMIT_TIME, DONE_TIME, SMSC_SEQUENCE, IS_REPORT, MSG_TYPE_STR, LONG_SMS_TOTAL, LONG_SMS_NOW_NUMBER, SEQ_IDS, LOGIN_NAME, PASSWORD};
+use crate::protocol::names::{SEQ_ID, AUTHENTICATOR, VERSION, STATUS, MSG_TYPE_U32, USER_ID, MSG_CONTENT, MSG_ID, SERVICE_ID, TP_UDHI, SP_ID, VALID_TIME, AT_TIME, SRC_ID, MSG_FMT, DEST_IDS, RESULT, DEST_ID, STATE, SUBMIT_TIME, DONE_TIME, SMSC_SEQUENCE, IS_REPORT, MSG_TYPE_STR, LONG_SMS_TOTAL, LONG_SMS_NOW_NUMBER, SEQ_IDS, LOGIN_NAME, PASSWORD};
 use crate::protocol::MsgType;
 
 pub trait ProtocolImpl: Send + Sync {
@@ -65,7 +65,7 @@ pub trait ProtocolImpl: Send + Sync {
 		Ok(dst)
 	}
 
-	fn get_framed(&mut self, buf: &mut BytesMut) ->  io::Result<Option<BytesMut>>;
+	fn get_framed(&mut self, buf: &mut BytesMut) -> io::Result<Option<BytesMut>>;
 
 	///解码送过来的消息。
 	fn decode_read_msg(&mut self, buf: &mut BytesMut) -> io::Result<Option<JsonValue>> {
@@ -81,12 +81,15 @@ pub trait ProtocolImpl: Send + Sync {
 				let msg_type = self.get_type_enum(tp);
 				let mut msg = match msg_type {
 					MsgType::Submit => self.decode_submit(buf, seq, tp)?,
-					MsgType::DeliverResp | MsgType::SubmitResp => self.decode_submit_or_deliver_resp(buf, seq, tp)?,
+					MsgType::DeliverResp => self.decode_submit_or_deliver_resp(buf, seq, tp)?,
+					MsgType::SubmitResp => self.decode_submit_or_deliver_resp(buf, seq, tp)?,
 					MsgType::Deliver => self.decode_deliver(buf, seq, tp)?,
 					MsgType::ActiveTest | MsgType::ActiveTestResp => self.decode_nobody(buf, seq, tp)?,
 					MsgType::Connect => self.decode_connect(buf, seq, tp)?,
 					MsgType::ConnectResp => self.decode_connect_resp(buf, seq, tp)?,
 					MsgType::Terminate | MsgType::TerminateResp => self.decode_nobody(buf, seq, tp)?,
+					MsgType::Report => self.decode_report(buf, seq, tp)?,
+					MsgType::ReportResp => self.decode_report_resp(buf, seq, tp)?,
 					MsgType::Query |
 					MsgType::QueryResp |
 					MsgType::Cancel |
@@ -108,9 +111,7 @@ pub trait ProtocolImpl: Send + Sync {
 					MsgType::PushMoRouteUpdate |
 					MsgType::PushMoRouteUpdateResp |
 					MsgType::GetMoRoute |
-					MsgType::ReportResp |
 					MsgType::UNKNOWN |
-					MsgType::Report |
 					MsgType::GetMoRouteResp =>
 						return Err(io::Error::new(io::ErrorKind::Other, "还未实现")),
 					// _ => return Err(io::Error::new(io::ErrorKind::NotFound, "type没值,或者无法转换")),
@@ -263,7 +264,7 @@ pub trait ProtocolImpl: Send + Sync {
 	}
 
 	///根据对方给的请求,处理以后的编码消息
-	fn encode_login_rep(&self, status: SmsStatus,json: &mut JsonValue) -> Option<BytesMut> {
+	fn encode_login_rep(&self, status: SmsStatus, json: &mut JsonValue) -> Option<BytesMut> {
 		let mut dst = BytesMut::with_capacity(33);
 		dst.put_u32(33);
 		dst.put_u32(self.get_type_id(MsgType::ConnectResp));
@@ -388,7 +389,7 @@ pub trait ProtocolImpl: Send + Sync {
 			}
 		};
 
-		let stat = match json[STAT].as_str() {
+		let stat = match json[STATE].as_str() {
 			Some(v) => v,
 			None => {
 				log::error!("没有stat.退出..json:{}", json);
@@ -754,6 +755,11 @@ pub trait ProtocolImpl: Send + Sync {
 		Ok(json)
 	}
 
+	fn decode_report(&self, _buf: &mut BytesMut, _seq: u32, _tp: u32) -> Result<JsonValue, io::Error> {
+		log::error!("此协议应该不会收到这个消息ID");
+		Err(io::Error::new(io::ErrorKind::InvalidData, "此协议应该不会收到这个消息ID"))
+	}
+
 	fn decode_deliver(&self, buf: &mut BytesMut, seq: u32, tp: u32) -> Result<JsonValue, io::Error> {
 		let mut json = JsonValue::new_object();
 		json[MSG_TYPE_U32] = tp.into();
@@ -773,18 +779,24 @@ pub trait ProtocolImpl: Send + Sync {
 			//长短信的处理 tp_udhi != 0 说明是长短信
 			json[TP_UDHI] = tp_udhi.into(); //TP_udhi 1
 			json[MSG_FMT] = msg_fmt.into(); //Msg_Fmt 1
-			decode_msg_content(buf, msg_fmt, &mut json, tp_udhi != 0)?;
+			let msg_content_len = buf.get_u8(); //Msg_Length	1
+			decode_msg_content(buf, msg_fmt, msg_content_len, &mut json, tp_udhi != 0)?;
 		} else {
 			buf.advance(1); //Msg_Length 1
 			json[IS_REPORT] = true.into(); //状态报告增加.
 			json[MSG_ID] = buf.get_u64().into(); // Msg_Id
-			json[STAT] = load_utf8_string(buf, 7).into(); // Stat
+			json[STATE] = load_utf8_string(buf, 7).into(); // Stat
 			json[SUBMIT_TIME] = load_utf8_string(buf, 10).into(); // Submit_time
 			json[DONE_TIME] = load_utf8_string(buf, 10).into(); // Done_time
 			json[SRC_ID] = load_utf8_string(buf, 32).into(); // dest_terminal_id
 		}
 
 		Ok(json)
+	}
+
+	fn decode_report_resp(&self, _buf: &mut BytesMut, _seq: u32, _tp: u32) -> Result<JsonValue, io::Error> {
+		log::error!("此协议应该不会收到这个消息ID");
+		Err(io::Error::new(io::ErrorKind::InvalidData, "此协议应该不会收到这个消息ID"))
 	}
 
 	fn decode_submit(&self, buf: &mut BytesMut, seq: u32, tp: u32) -> Result<JsonValue, io::Error> {
@@ -818,7 +830,8 @@ pub trait ProtocolImpl: Send + Sync {
 		buf.advance(1); //Dest_terminal_type	1
 
 		//长短信的处理 tp_udhi != 0 说明是长短信
-		decode_msg_content(buf, msg_fmt, &mut json, tp_udhi != 0)?;
+		let msg_content_len = buf.get_u8(); //Msg_Length	1
+		decode_msg_content(buf, msg_fmt, msg_content_len, &mut json, tp_udhi != 0)?;
 
 		Ok(json)
 	}
@@ -877,9 +890,7 @@ pub fn get_cmpp_msg_id() -> u64 {
 }
 
 ///处理短信内容的通用方法.会处理msg_length和msg_content.需要这两个是连续的.
-pub fn decode_msg_content(buf: &mut BytesMut, msg_fmt: u8, json: &mut JsonValue, is_long_sms: bool) -> Result<(), io::Error> {
-	let mut msg_content_len = buf.get_u8(); //Msg_Length	1
-
+pub fn decode_msg_content(buf: &mut BytesMut, msg_fmt: u8, mut msg_content_len: u8, json: &mut JsonValue, is_long_sms: bool) -> Result<(), io::Error> {
 	if is_long_sms {
 		let head_len = buf.get_u8(); //接下来的长度
 		buf.advance((head_len - 2) as usize); //跳过对应的长度

@@ -2,7 +2,7 @@ use tokio_util::codec::{LengthDelimitedCodec, Decoder};
 use crate::protocol::implements::{ProtocolImpl, get_cmpp_msg_id, fill_bytes_zero, load_utf8_string, decode_msg_content};
 use json::JsonValue;
 use bytes::{BytesMut, BufMut, Buf};
-use crate::protocol::names::{AUTHENTICATOR, SEQ_ID, VERSION, MSG_ID, SERVICE_ID, STAT, SUBMIT_TIME, DONE_TIME, SMSC_SEQUENCE, SRC_ID, DEST_ID, SEQ_IDS, MSG_CONTENT, SP_ID, VALID_TIME, AT_TIME, DEST_IDS, MSG_TYPE_U32, STATUS, RESULT, TP_UDHI, MSG_FMT, IS_REPORT};
+use crate::protocol::names::{AUTHENTICATOR, SEQ_ID, VERSION, MSG_ID, SERVICE_ID, STATE, SUBMIT_TIME, DONE_TIME, SMSC_SEQUENCE, SRC_ID, DEST_ID, SEQ_IDS, MSG_CONTENT, SP_ID, VALID_TIME, AT_TIME, DEST_IDS, MSG_TYPE_U32, STATUS, RESULT, TP_UDHI, MSG_FMT, IS_REPORT};
 use crate::protocol::{MsgType, SmsStatus};
 use std::io::Error;
 use crate::protocol::msg_type::MsgType::SubmitResp;
@@ -20,7 +20,7 @@ pub struct Cmpp32 {
 }
 
 impl ProtocolImpl for Cmpp32 {
-	fn get_framed(&mut self, buf: &mut BytesMut) -> io::Result<Option<BytesMut>>  {
+	fn get_framed(&mut self, buf: &mut BytesMut) -> io::Result<Option<BytesMut>> {
 		self.codec.decode(buf)
 	}
 
@@ -114,7 +114,7 @@ impl ProtocolImpl for Cmpp32 {
 			}
 		};
 
-		let stat = match json[STAT].as_str() {
+		let stat = match json[STATE].as_str() {
 			Some(v) => v,
 			None => {
 				log::error!("没有stat.退出..json:{}", json);
@@ -482,12 +482,13 @@ impl ProtocolImpl for Cmpp32 {
 			//长短信的处理 tp_udhi != 0 说明是长短信
 			json[TP_UDHI] = tp_udhi.into(); //TP_udhi 1
 			json[MSG_FMT] = msg_fmt.into(); //Msg_Fmt 1
-			decode_msg_content(buf, msg_fmt, &mut json, tp_udhi != 0)?;
+			let msg_content_len = buf.get_u8(); //Msg_Length	1
+			decode_msg_content(buf, msg_fmt, msg_content_len, &mut json, tp_udhi != 0)?;
 		} else {
 			buf.advance(1); //Msg_Length 1
 			json[IS_REPORT] = true.into(); //状态报告增加.
 			json[MSG_ID] = buf.get_u64().into(); // Msg_Id
-			json[STAT] = load_utf8_string(buf, 7).into(); // Stat
+			json[STATE] = load_utf8_string(buf, 7).into(); // Stat
 			json[SUBMIT_TIME] = load_utf8_string(buf, 10).into(); // Submit_time
 			json[DONE_TIME] = load_utf8_string(buf, 10).into(); // Done_time
 			json[SRC_ID] = load_utf8_string(buf, 21).into(); // dest_terminal_id
@@ -525,7 +526,8 @@ impl ProtocolImpl for Cmpp32 {
 		json[DEST_IDS] = dest_ids.into();
 
 		//长短信的处理 tp_udhi != 0 说明是长短信
-		decode_msg_content(buf, msg_fmt, &mut json, tp_udhi != 0)?;
+		let msg_content_len = buf.get_u8(); //Msg_Length	1
+		decode_msg_content(buf, msg_fmt, msg_content_len, &mut json, tp_udhi != 0)?;
 
 		Ok(json)
 	}

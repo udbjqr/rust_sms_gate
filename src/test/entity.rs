@@ -17,7 +17,7 @@ use std::net::{SocketAddr, Ipv4Addr};
 fn test_json_array() {
 	let json = json::object! {arr:["123","456","789"]};
 
-	println!("{}", json["arr"][0].as_str().unwrap_or("没有东西呀"));
+	println!("{}", json.to_string());
 }
 
 
