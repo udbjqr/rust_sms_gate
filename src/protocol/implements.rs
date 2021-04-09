@@ -15,56 +15,6 @@ use crate::protocol::names::{SEQ_ID, AUTHENTICATOR, VERSION, STATUS, MSG_TYPE_U3
 use crate::protocol::MsgType;
 
 pub trait ProtocolImpl: Send + Sync {
-	///生成登录操作的消息
-	fn encode_connect(&self, json: &mut JsonValue) -> Result<BytesMut, io::Error> {
-		let sp_id = match json[LOGIN_NAME].as_str() {
-			Some(v) => v,
-			None => {
-				log::error!("没有login_name.退出..json:{}", json);
-				return Err(io::Error::new(io::ErrorKind::NotFound, "没有login_name"));
-			}
-		};
-
-		let password = match json[PASSWORD].as_str() {
-			Some(v) => v,
-			None => {
-				log::error!("没有password.退出..json:{}", json);
-				return Err(io::Error::new(io::ErrorKind::NotFound, "没有password"));
-			}
-		};
-
-		let version = match json[VERSION].as_u32() {
-			Some(v) => v,
-			None => {
-				log::error!("没有version.退出..json:{}", json);
-				return Err(io::Error::new(io::ErrorKind::NotFound, "没有version"));
-			}
-		};
-
-		if sp_id.len() != 6 {
-			return Err(io::Error::new(io::ErrorKind::Other, "sp_id,长度应该为6位"));
-		}
-
-		let local: DateTime<Local> = Local::now();
-		let mut time: u32 = local.month();
-		time = time * 100 + local.day();
-		time = time * 100 + local.hour();
-		time = time * 100 + local.minute();
-		time = time * 100 + local.second();
-
-		//固定这个大小。
-		let mut dst = BytesMut::with_capacity(39);
-		dst.put_u32(39);
-		dst.put_u32(self.get_type_id(Connect));
-		dst.put_u32(get_sequence_id(1));
-		dst.extend_from_slice(sp_id.as_bytes());
-		dst.extend_from_slice(self.get_auth(sp_id, password, time).as_ref());
-		dst.put_u8(version as u8);
-		dst.put_u32(time);
-
-		Ok(dst)
-	}
-
 	fn get_framed(&mut self, buf: &mut BytesMut) -> io::Result<Option<BytesMut>>;
 
 	///解码送过来的消息。
@@ -219,7 +169,7 @@ pub trait ProtocolImpl: Send + Sync {
 			SmsStatus::AuthError => 3,
 			SmsStatus::VersionError => 4,
 			SmsStatus::TrafficRestrictions => 8,
-			SmsStatus::LoginOtherError => 5,
+			SmsStatus::OtherError => 5,
 			SmsStatus::UNKNOWN => 999,
 		}
 	}
@@ -232,13 +182,13 @@ pub trait ProtocolImpl: Send + Sync {
 			3 => SmsStatus::AuthError,
 			4 => SmsStatus::VersionError,
 			8 => SmsStatus::TrafficRestrictions,
-			5 => SmsStatus::LoginOtherError,
-			_ => { SmsStatus::LoginOtherError }
+			5 => SmsStatus::OtherError,
+			_ => { SmsStatus::OtherError }
 		}
 	}
 
 	///通过给定的账号密码。计算实际向客户发送的消息，也是用来进行校验密码是否正确。
-	fn get_auth(&self, sp_id: &str, password: &str, timestamp: u32) -> String {
+	fn get_auth(&self, sp_id: &str, password: &str, timestamp: u32) -> [u8; 16] {
 		let time_str = format!("{:010}", timestamp);
 
 		//用于鉴别源地址。其值通过单向MD5 hash计算得出，表示如下：
@@ -257,14 +207,55 @@ pub trait ProtocolImpl: Send + Sync {
 
 		let (src, _) = src.split_at(src.len());
 
-		let md5 = md5::compute(src).0;
-		unsafe {
-			String::from_utf8_unchecked(Vec::from(md5))
+		md5::compute(src).0
+	}
+
+	///生成登录操作的消息
+	fn encode_connect(&self, json: &mut JsonValue) -> Result<BytesMut, io::Error> {
+		let sp_id = match json[LOGIN_NAME].as_str() {
+			Some(v) => v,
+			None => {
+				log::error!("没有login_name.退出..json:{}", json);
+				return Err(io::Error::new(io::ErrorKind::NotFound, "没有login_name"));
+			}
+		};
+
+		let password = match json[PASSWORD].as_str() {
+			Some(v) => v,
+			None => {
+				log::error!("没有password.退出..json:{}", json);
+				return Err(io::Error::new(io::ErrorKind::NotFound, "没有password"));
+			}
+		};
+
+		let version = match json[VERSION].as_u32() {
+			Some(v) => v,
+			None => {
+				log::error!("没有version.退出..json:{}", json);
+				return Err(io::Error::new(io::ErrorKind::NotFound, "没有version"));
+			}
+		};
+
+		if sp_id.len() != 6 {
+			return Err(io::Error::new(io::ErrorKind::Other, "sp_id,长度应该为6位"));
 		}
+
+		let time = get_time();
+		//固定这个大小。
+		let mut dst = BytesMut::with_capacity(39);
+		dst.put_u32(39);
+		dst.put_u32(self.get_type_id(Connect));
+		dst.put_u32(get_sequence_id(1));
+		dst.extend_from_slice(sp_id.as_bytes());
+		dst.extend_from_slice(&self.get_auth(sp_id, password, time));
+		dst.put_u8(version as u8);
+		dst.put_u32(time);
+
+		Ok(dst)
 	}
 
 	///根据对方给的请求,处理以后的编码消息
-	fn encode_login_rep(&self, status: SmsStatus, json: &mut JsonValue) -> Option<BytesMut> {
+	fn encode_connect_rep(&self, status: SmsStatus, json: &mut JsonValue) -> Option<BytesMut> {
 		let mut dst = BytesMut::with_capacity(33);
 		dst.put_u32(33);
 		dst.put_u32(self.get_type_id(MsgType::ConnectResp));
@@ -280,7 +271,6 @@ pub trait ProtocolImpl: Send + Sync {
 		Some(dst)
 	}
 
-
 	fn encode_submit_resp(&self, status: SmsStatus, json: &mut JsonValue) -> Option<BytesMut> {
 		let seq_id = match json[SEQ_ID].as_u32() {
 			Some(v) => v,
@@ -292,7 +282,7 @@ pub trait ProtocolImpl: Send + Sync {
 
 		let submit_status = self.get_status_id(&status);
 
-		let msg_id: u64 = get_cmpp_msg_id();
+		let msg_id: u64 = create_cmpp_msg_id();
 		json[MSG_ID] = msg_id.into();
 
 		let mut buf = BytesMut::with_capacity(24);
@@ -372,7 +362,6 @@ pub trait ProtocolImpl: Send + Sync {
 	}
 
 	fn encode_report(&self, json: &mut JsonValue) -> Result<BytesMut, Error> {
-		//只检测一下.如果没有后续不处理.
 		let msg_id = match json[MSG_ID].as_u64() {
 			None => {
 				log::error!("没有msg_id字串.退出..json:{}", json);
@@ -434,7 +423,6 @@ pub trait ProtocolImpl: Send + Sync {
 			}
 		};
 
-
 		//状态报告长度固定
 		let mut dst = BytesMut::with_capacity(180);
 
@@ -445,7 +433,7 @@ pub trait ProtocolImpl: Send + Sync {
 		seq_ids.push(seq_id);
 		dst.put_u32(seq_id);
 
-		dst.put_u64(get_cmpp_msg_id()); //Msg_Id 8
+		dst.put_u64(create_cmpp_msg_id()); //Msg_Id 8
 		fill_bytes_zero(&mut dst, dest_id, 21);//dest_id 21
 		fill_bytes_zero(&mut dst, service_id, 10);//service_id 10
 		dst.put_u8(0); //TP_pid 1
@@ -555,7 +543,7 @@ pub trait ProtocolImpl: Send + Sync {
 			seq_ids.push(seq_id);
 			dst.put_u32(seq_id);
 
-			dst.put_u64(get_cmpp_msg_id()); //Msg_Id 8
+			dst.put_u64(create_cmpp_msg_id()); //Msg_Id 8
 			fill_bytes_zero(&mut dst, dest_id, 21);//dest_id 21
 			fill_bytes_zero(&mut dst, service_id, 10);//service_id 10
 			dst.put_u8(0); //TP_pid 1
@@ -777,7 +765,6 @@ pub trait ProtocolImpl: Send + Sync {
 		let is_report = buf.get_u8(); //Registered_Delivery	1
 		if is_report == 0 {
 			//长短信的处理 tp_udhi != 0 说明是长短信
-			json[TP_UDHI] = tp_udhi.into(); //TP_udhi 1
 			json[MSG_FMT] = msg_fmt.into(); //Msg_Fmt 1
 			let msg_content_len = buf.get_u8(); //Msg_Length	1
 			decode_msg_content(buf, msg_fmt, msg_content_len, &mut json, tp_udhi != 0)?;
@@ -809,7 +796,6 @@ pub trait ProtocolImpl: Send + Sync {
 		json[SERVICE_ID] = load_utf8_string(buf, 10).into(); //service_id 10
 		buf.advance(35); //Fee_UserType 1  Fee_terminal_Id 32 Fee_terminal_type	1 TP_pId	1
 		let tp_udhi = buf.get_u8(); //是否长短信
-		json[TP_UDHI] = tp_udhi.into(); //TP_udhi 1
 		let msg_fmt = buf.get_u8();
 		json[MSG_FMT] = msg_fmt.into(); //Msg_Fmt 1
 		json[SP_ID] = load_utf8_string(buf, 6).into(); //sp_id 6
@@ -877,7 +863,7 @@ pub fn copy_to_bytes(buf: &mut BytesMut, len: usize) -> Bytes {
 }
 
 ///返回一个msg_id.目前在Cmpp协议里面使用
-pub fn get_cmpp_msg_id() -> u64 {
+pub fn create_cmpp_msg_id() -> u64 {
 	let date = Local::now();
 	let mut result: u64 = date.month() as u64;
 	result = result << 5 | (date.day() & 0x1F) as u64;
@@ -889,13 +875,14 @@ pub fn get_cmpp_msg_id() -> u64 {
 	result << 16 | (get_sequence_id(1) & 0xff) as u64
 }
 
-///处理短信内容的通用方法.会处理msg_length和msg_content.需要这两个是连续的.
+///处理短信内容的通用方法.msg_content..
 pub fn decode_msg_content(buf: &mut BytesMut, msg_fmt: u8, mut msg_content_len: u8, json: &mut JsonValue, is_long_sms: bool) -> Result<(), io::Error> {
 	if is_long_sms {
 		let head_len = buf.get_u8(); //接下来的长度
 		buf.advance((head_len - 2) as usize); //跳过对应的长度
 		json[LONG_SMS_TOTAL] = buf.get_u8().into();
 		json[LONG_SMS_NOW_NUMBER] = buf.get_u8().into();
+		json[TP_UDHI] = 1.into(); //TP_udhi 1
 
 		if msg_content_len > (head_len + 1) {
 			msg_content_len = msg_content_len - head_len - 1;

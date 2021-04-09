@@ -18,6 +18,7 @@ pub static MSG_CONTENT: &'static str = "msg_content";
 pub static SERVICE_ID: &'static str = "service_id";
 pub static NODE_ID: &'static str = "node_id";
 pub static RESP_NODE_ID: &'static str = "resp_node_id";
+pub static TEXT: &'static str = "text";
 pub static RESP_SEQ_ID: &'static str = "resp_seq_id";
 pub static PASSWORD: &'static str = "password";
 pub static ADDRESS: &'static str = "address";

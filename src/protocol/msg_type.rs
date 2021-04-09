@@ -138,7 +138,7 @@ pub enum SmsStatus {
 	///版本太高
 	VersionError,
 	///登录时的其他错误
-	LoginOtherError,
+	OtherError,
 	///流量限制
 	TrafficRestrictions,
 	UNKNOWN,
@@ -152,7 +152,7 @@ impl From<&'static str> for SmsStatus {
 			"AddError" => SmsStatus::AddError,
 			"AuthError" => SmsStatus::AuthError,
 			"VersionError" => SmsStatus::VersionError,
-			"LoginOtherError" => SmsStatus::LoginOtherError,
+			"LoginOtherError" => SmsStatus::OtherError,
 			"TrafficRestrictions" => SmsStatus::TrafficRestrictions,
 			_ => SmsStatus::UNKNOWN
 		}
@@ -168,7 +168,7 @@ impl Into<&'static str> for SmsStatus {
 			SmsStatus::AddError => "AddError",
 			SmsStatus::AuthError => "AuthError",
 			SmsStatus::VersionError => "VersionError",
-			SmsStatus::LoginOtherError => "LoginOtherError",
+			SmsStatus::OtherError => "LoginOtherError",
 			SmsStatus::TrafficRestrictions => "TrafficRestrictions",
 			SmsStatus::UNKNOWN => "UNKNOWN",
 		}
@@ -185,7 +185,7 @@ impl fmt::Display for SmsStatus {
 			SmsStatus::AddError => write!(f, "登录,非法源地址,"),
 			SmsStatus::AuthError => write!(f, "登录,认证错,"),
 			SmsStatus::VersionError => write!(f, "登录,版本太高,"),
-			SmsStatus::LoginOtherError => write!(f, "登录,其他错误"),
+			SmsStatus::OtherError => write!(f, "登录,其他错误"),
 			SmsStatus::TrafficRestrictions => write!(f, "发送.流量限制"),
 			SmsStatus::UNKNOWN => write!(f, "未知的错误."),
 			// _ => write!(f, "其他错误,这里没有更新。"),

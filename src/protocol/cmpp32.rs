@@ -1,8 +1,8 @@
 use tokio_util::codec::{LengthDelimitedCodec, Decoder};
-use crate::protocol::implements::{ProtocolImpl, get_cmpp_msg_id, fill_bytes_zero, load_utf8_string, decode_msg_content};
+use crate::protocol::implements::{ProtocolImpl, create_cmpp_msg_id, fill_bytes_zero, load_utf8_string, decode_msg_content};
 use json::JsonValue;
 use bytes::{BytesMut, BufMut, Buf};
-use crate::protocol::names::{AUTHENTICATOR, SEQ_ID, VERSION, MSG_ID, SERVICE_ID, STATE, SUBMIT_TIME, DONE_TIME, SMSC_SEQUENCE, SRC_ID, DEST_ID, SEQ_IDS, MSG_CONTENT, SP_ID, VALID_TIME, AT_TIME, DEST_IDS, MSG_TYPE_U32, STATUS, RESULT, TP_UDHI, MSG_FMT, IS_REPORT};
+use crate::protocol::names::{AUTHENTICATOR, SEQ_ID, VERSION, MSG_ID, SERVICE_ID, STATE, SUBMIT_TIME, DONE_TIME, SMSC_SEQUENCE, SRC_ID, DEST_ID, SEQ_IDS, MSG_CONTENT, SP_ID, VALID_TIME, AT_TIME, DEST_IDS, MSG_TYPE_U32, STATUS, RESULT,  MSG_FMT, IS_REPORT};
 use crate::protocol::{MsgType, SmsStatus};
 use std::io::Error;
 use crate::protocol::msg_type::MsgType::SubmitResp;
@@ -25,7 +25,7 @@ impl ProtocolImpl for Cmpp32 {
 	}
 
 	///根据对方给的请求,处理以后的编码消息
-	fn encode_login_rep(&self, status: SmsStatus, json: &mut JsonValue) -> Option<BytesMut> {
+	fn encode_connect_rep(&self, status: SmsStatus, json: &mut JsonValue) -> Option<BytesMut> {
 		let mut dst = BytesMut::with_capacity(30);
 		dst.put_u32(30);
 		dst.put_u32(self.get_type_id(MsgType::ConnectResp));
@@ -52,7 +52,7 @@ impl ProtocolImpl for Cmpp32 {
 
 		let submit_status = self.get_status_id(&status);
 
-		let msg_id: u64 = get_cmpp_msg_id();
+		let msg_id: u64 = create_cmpp_msg_id();
 		json[MSG_ID] = msg_id.into();
 
 		let mut buf = BytesMut::with_capacity(21);
@@ -170,7 +170,7 @@ impl ProtocolImpl for Cmpp32 {
 		seq_ids.push(seq_id);
 		dst.put_u32(seq_id);
 
-		dst.put_u64(get_cmpp_msg_id()); //Msg_Id 8
+		dst.put_u64(create_cmpp_msg_id()); //Msg_Id 8
 		fill_bytes_zero(&mut dst, dest_id, 21);//dest_id 21
 		fill_bytes_zero(&mut dst, service_id, 10);//service_id 10
 		dst.put_u8(0); //TP_pid 1
@@ -278,7 +278,7 @@ impl ProtocolImpl for Cmpp32 {
 			seq_ids.push(seq_id);
 			dst.put_u32(seq_id);
 
-			dst.put_u64(get_cmpp_msg_id()); //Msg_Id 8
+			dst.put_u64(create_cmpp_msg_id()); //Msg_Id 8
 			fill_bytes_zero(&mut dst, dest_id, 21);//dest_id 21
 			fill_bytes_zero(&mut dst, service_id, 10);//service_id 10
 			dst.put_u8(0); //TP_pid 1
@@ -480,7 +480,6 @@ impl ProtocolImpl for Cmpp32 {
 		let is_report = buf.get_u8(); //Registered_Delivery	1
 		if is_report == 0 {
 			//长短信的处理 tp_udhi != 0 说明是长短信
-			json[TP_UDHI] = tp_udhi.into(); //TP_udhi 1
 			json[MSG_FMT] = msg_fmt.into(); //Msg_Fmt 1
 			let msg_content_len = buf.get_u8(); //Msg_Length	1
 			decode_msg_content(buf, msg_fmt, msg_content_len, &mut json, tp_udhi != 0)?;
@@ -507,7 +506,6 @@ impl ProtocolImpl for Cmpp32 {
 		json[SERVICE_ID] = load_utf8_string(buf, 10).into(); //service_id 10
 		buf.advance(23); //Fee_UserType 1  Fee_terminal_Id 21 TP_pId	1
 		let tp_udhi = buf.get_u8(); //是否长短信
-		json[TP_UDHI] = tp_udhi.into(); //TP_udhi 1
 		let msg_fmt = buf.get_u8();
 		json[MSG_FMT] = msg_fmt.into(); //Msg_Fmt 1
 		json[SP_ID] = load_utf8_string(buf, 6).into(); //sp_id 6

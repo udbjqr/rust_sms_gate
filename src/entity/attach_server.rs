@@ -142,7 +142,7 @@ impl Entity for ServerEntity {
 
 		if index.is_none() {
 			log::warn!("当前已经满。不再继续增加。entity_id:{}", self.id);
-			return (0, SmsStatus::LoginOtherError, 0, 0, None, None, None);
+			return (0, SmsStatus::OtherError, 0, 0, None, None, None);
 		}
 
 		let index = index.unwrap();

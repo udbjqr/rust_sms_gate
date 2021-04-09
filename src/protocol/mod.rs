@@ -192,7 +192,7 @@ impl Protocol {
 		match self {
 			Protocol::CMPP48(obj) => {
 				match obj.get_type_enum(json[MSG_TYPE_U32].as_u32().unwrap()) {
-					MsgType::Connect => obj.encode_login_rep(status, json),
+					MsgType::Connect => obj.encode_connect_rep(status, json),
 					MsgType::Submit => obj.encode_submit_resp(status, json),
 					MsgType::Deliver => obj.encode_deliver_resp(status, json),
 					MsgType::Report => obj.encode_report_resp(status, json),
@@ -205,7 +205,7 @@ impl Protocol {
 			}
 			Protocol::CMPP32(obj) => {
 				match obj.get_type_enum(json[MSG_TYPE_U32].as_u32().unwrap()) {
-					MsgType::Connect => obj.encode_login_rep(status, json),
+					MsgType::Connect => obj.encode_connect_rep(status, json),
 					MsgType::Submit => obj.encode_submit_resp(status, json),
 					MsgType::Deliver => obj.encode_deliver_resp(status, json),
 					MsgType::Report => obj.encode_report_resp(status, json),
@@ -218,7 +218,7 @@ impl Protocol {
 			}
 			Protocol::SMGP(obj) => {
 				match obj.get_type_enum(json[MSG_TYPE_U32].as_u32().unwrap()) {
-					MsgType::Connect => obj.encode_login_rep(status, json),
+					MsgType::Connect => obj.encode_connect_rep(status, json),
 					MsgType::Submit => obj.encode_submit_resp(status, json),
 					MsgType::Deliver => obj.encode_deliver_resp(status, json),
 					MsgType::Report => obj.encode_report_resp(status, json),
@@ -231,7 +231,7 @@ impl Protocol {
 			}
 			Protocol::SGIP(obj) => {
 				match obj.get_type_enum(json[MSG_TYPE_U32].as_u32().unwrap()) {
-					MsgType::Connect => obj.encode_login_rep(status, json),
+					MsgType::Connect => obj.encode_connect_rep(status, json),
 					MsgType::Submit => obj.encode_submit_resp(status, json),
 					MsgType::Deliver => obj.encode_deliver_resp(status, json),
 					MsgType::Report => obj.encode_report_resp(status, json),
@@ -244,7 +244,7 @@ impl Protocol {
 			}
 			Protocol::SMPP(obj) => {
 				match obj.get_type_enum(json[MSG_TYPE_U32].as_u32().unwrap()) {
-					MsgType::Connect => obj.encode_login_rep(status, json),
+					MsgType::Connect => obj.encode_connect_rep(status, json),
 					MsgType::Submit => obj.encode_submit_resp(status, json),
 					MsgType::Deliver => obj.encode_deliver_resp(status, json),
 					MsgType::Report => obj.encode_report_resp(status, json),

@@ -1,9 +1,8 @@
 use chrono::{DateTime, Local, Datelike, Timelike};
-
 mod entity;
 
 #[test]
-fn test_time(){
+fn test_time() {
 	let local: DateTime<Local> = Local::now();
 	let mut time: u32 = local.month();
 	time = time * 100 + local.day();
@@ -15,3 +14,4 @@ fn test_time(){
 
 	dbg!(time,time_str);
 }
+

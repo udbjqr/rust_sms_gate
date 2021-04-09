@@ -98,7 +98,7 @@ impl Entity for CustomEntity {
 
 		if index.is_none() {
 			log::warn!("当前已经满。不再继续增加。entity_id:{}", self.id);
-			return (0, SmsStatus::LoginOtherError, 0, 0, None, None, None);
+			return (0, SmsStatus::OtherError, 0, 0, None, None, None);
 		}
 
 		let index = index.unwrap();
@@ -158,7 +158,7 @@ pub fn check_custom_login(json: &JsonValue, entity: &mut Box<(dyn Entity + 'stat
 		}
 	} else {
 		log::error!("附加至CustomEntity通道异常。json里面没有version。。json:{}", json);
-		return Some((SmsStatus::LoginOtherError, json.clone()));
+		return Some((SmsStatus::OtherError, json.clone()));
 	}
 
 	None
