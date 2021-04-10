@@ -2,7 +2,7 @@ use tokio_util::codec::{LengthDelimitedCodec, Decoder};
 use crate::protocol::implements::{ProtocolImpl, create_cmpp_msg_id, fill_bytes_zero, load_utf8_string, decode_msg_content};
 use json::JsonValue;
 use bytes::{BytesMut, BufMut, Buf};
-use crate::protocol::names::{AUTHENTICATOR, SEQ_ID, VERSION, MSG_ID, SERVICE_ID, STATE, SUBMIT_TIME, DONE_TIME, SMSC_SEQUENCE, SRC_ID, DEST_ID, SEQ_IDS, MSG_CONTENT, SP_ID, VALID_TIME, AT_TIME, DEST_IDS, MSG_TYPE_U32, STATUS, RESULT,  MSG_FMT, IS_REPORT};
+use crate::protocol::names::{AUTHENTICATOR, SEQ_ID, VERSION, MSG_ID, SERVICE_ID, STATE, SUBMIT_TIME, DONE_TIME, SMSC_SEQUENCE, SRC_ID, DEST_ID, SEQ_IDS, MSG_CONTENT, SP_ID, VALID_TIME, AT_TIME, DEST_IDS, MSG_TYPE_U32, RESULT,  MSG_FMT, IS_REPORT};
 use crate::protocol::{MsgType, SmsStatus};
 use std::io::Error;
 use crate::protocol::msg_type::MsgType::SubmitResp;
@@ -443,16 +443,6 @@ impl ProtocolImpl for Cmpp32 {
 		Ok(dst)
 	}
 
-	fn decode_connect_resp(&self, buf: &mut BytesMut, seq: u32, tp: u32) -> Result<JsonValue, io::Error> {
-		let mut json = JsonValue::new_object();
-		json[MSG_TYPE_U32] = tp.into();
-		json[SEQ_ID] = seq.into();
-		json[STATUS] = buf.get_u32().into();
-		buf.advance(16);
-		json[VERSION] = buf.get_u8().into();
-
-		Ok(json)
-	}
 
 	fn decode_submit_or_deliver_resp(&self, buf: &mut BytesMut, _seq: u32, tp: u32) -> Result<JsonValue, io::Error> {
 		let mut json = JsonValue::new_object();

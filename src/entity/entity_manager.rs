@@ -13,7 +13,7 @@ use crate::entity::{CustomEntity, Entity};
 use crate::entity::attach_server::ServerEntity;
 use crate::get_runtime;
 use crate::global::{load_config_file, TOPIC_FROM_B_SUBMIT, TOPIC_FROM_B_DELIVER, TOPIC_FROM_B_REPORT};
-use crate::protocol::names::{MANAGER_TYPE, VERSION, SERVICE_ID, NODE_ID};
+use crate::protocol::names::{MANAGER_TYPE, VERSION, SERVICE_ID, SP_ID, LOGIN_NAME, PASSWORD, ADDRESS, NAME, READ_LIMIT, WRITE_LIMIT, PROTOCOL, MAX_CHANNEL_NUMBER, ALLOW_ADDRS};
 
 ///实体的管理对象。
 /// 负责处理消息队列送过来的实体的开启、关闭等操作
@@ -77,7 +77,7 @@ impl EntityManager {
 			// Commit automatically every 5 seconds.
 			.set("enable.auto.commit", "true")
 			.set("auto.commit.interval.ms", "5000")
-			.set("enable.auto.offset.store", "false")
+			// .set("enable.auto.offset.store", "false")
 			.create() {
 			Ok(v) => v,
 			Err(e) => {
@@ -222,8 +222,6 @@ async fn handle_queue_msg(topic: &str, mut json: JsonValue, context: &mut RunCon
 			}
 		}
 		"account.modify" | "passage.add" | "account.add" | "passage.modify" => {
-			info!("收到{}消息。", topic);
-
 			let mut entitys = entity_manager.entitys.write().await;
 			if let Some(_) = entitys.get(&id) {
 				if let Some(sender) = context.senders.remove(&id) {
@@ -240,16 +238,16 @@ async fn handle_queue_msg(topic: &str, mut json: JsonValue, context: &mut RunCon
 			if topic.starts_with("account") {
 				let mut entity = Box::new(CustomEntity::new(
 					id,
-					json["name"].as_str().unwrap_or("未知").to_string(),
+					json[NAME].as_str().unwrap_or("未知").to_string(),
 					json[SERVICE_ID].as_str().unwrap_or("未知").to_string(),
-					json[NODE_ID].as_u32().unwrap_or(0),
+					json[SP_ID].as_str().unwrap_or("").to_string(),
 					json["desc"].as_str().unwrap_or("").to_string(),
-					json["login_name"].as_str().unwrap_or("").to_string(),
-					json["password"].as_str().unwrap_or("").to_string(),
-					json["allow_addrs"].as_str().unwrap_or("").split(",").map(|s| s.to_string()).collect(),
-					json["read_limit"].as_u32().unwrap_or(0xffffffff),
-					json["write_limit"].as_u32().unwrap_or(0xffffffff),
-					json["max_channel_number"].as_usize().unwrap_or(0xff),
+					json[LOGIN_NAME].as_str().unwrap_or("").to_string(),
+					json[PASSWORD].as_str().unwrap_or("").to_string(),
+					json[ALLOW_ADDRS].as_str().unwrap_or("").split(",").map(|s| s.to_string()).collect(),
+					json[READ_LIMIT].as_u32().unwrap_or(0xffffffff),
+					json[WRITE_LIMIT].as_u32().unwrap_or(0xffffffff),
+					json[MAX_CHANNEL_NUMBER].as_usize().unwrap_or(0xff),
 					json,
 					context.entity_to_manager_tx.clone(),
 				));
@@ -262,17 +260,17 @@ async fn handle_queue_msg(topic: &str, mut json: JsonValue, context: &mut RunCon
 			} else {
 				let mut entity = ServerEntity::new(
 					id,
-					json["name"].as_str().unwrap_or("未知").to_string(),
+					json[NAME].as_str().unwrap_or("未知").to_string(),
 					json[SERVICE_ID].as_str().unwrap_or("未知").to_string(),
-					json[NODE_ID].as_u32().unwrap_or(0),
-					json["login_name"].as_str().unwrap_or("").to_string(),
-					json["password"].as_str().unwrap_or("").to_string(),
-					json["addr"].as_str().unwrap_or("").to_string(),
+					json[SP_ID].as_str().unwrap_or("").to_string(),
+					json[LOGIN_NAME].as_str().unwrap_or("").to_string(),
+					json[PASSWORD].as_str().unwrap_or("").to_string(),
+					json[ADDRESS].as_str().unwrap_or("").to_string(),
 					json[VERSION].as_str().unwrap_or("0").parse().unwrap_or(0),
-					json["protocol"].as_str().unwrap_or("").to_string(),
-					json["read_limit"].as_u32().unwrap_or(0xffffffff),
-					json["write_limit"].as_u32().unwrap_or(0xffffffff),
-					json["max_channel_number"].as_usize().unwrap_or(0xff),
+					json[PROTOCOL].as_str().unwrap_or("").to_string(),
+					json[READ_LIMIT].as_u32().unwrap_or(0xffffffff),
+					json[WRITE_LIMIT].as_u32().unwrap_or(0xffffffff),
+					json[MAX_CHANNEL_NUMBER].as_usize().unwrap_or(0x1),
 					json,
 					context.entity_to_manager_tx.clone(),
 				);

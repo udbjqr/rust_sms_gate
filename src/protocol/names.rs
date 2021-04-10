@@ -16,7 +16,6 @@ pub static IS_REPORT: &'static str = "is_report";
 pub static RESULT: &'static str = "result";
 pub static MSG_CONTENT: &'static str = "msg_content";
 pub static SERVICE_ID: &'static str = "service_id";
-pub static NODE_ID: &'static str = "node_id";
 pub static RESP_NODE_ID: &'static str = "resp_node_id";
 pub static TEXT: &'static str = "text";
 pub static RESP_SEQ_ID: &'static str = "resp_seq_id";
@@ -37,6 +36,12 @@ pub static DEST_ID: &'static str = "dest_id";
 pub static DEST_IDS: &'static str = "dest_ids";
 pub static MSG_FMT: &'static str = "msg_fmt";
 pub static DEST_LEN: &'static str = "dest_len";
+pub static READ_LIMIT: &'static str = "read_limit";
+pub static PROTOCOL: &'static str = "protocol";
+pub static ALLOW_ADDRS: &'static str = "allow_addrs";
+pub static MAX_CHANNEL_NUMBER: &'static str = "max_channel_number";
+pub static WRITE_LIMIT: &'static str = "write_limit";
+pub static NAME: &'static str = "name";
 ///长短信总条数
 pub static LONG_SMS_TOTAL: &'static str = "l_s_total";
 ///长短信当前第几条

@@ -1,37 +1,40 @@
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::{mpsc};
 use json::JsonValue;
 use std::sync::Arc;
-use crate::entity::{ChannelStates, EntityManager};
+use crate::entity::{ChannelStates};
 use std::collections::HashMap;
-use crate::protocol::names::{MANAGER_TYPE, MSG_TYPE_STR, ID, WAIT_RECEIPT, SEQ_ID, LONG_SMS_TOTAL, SRC_ID, DEST_ID, DEST_IDS, LONG_SMS_NOW_NUMBER, MSG_ID, MSG_CONTENT, MSG_IDS, RECEIVE_TIME, ENTITY_ID, SEQ_IDS, CHANNEL_ID, IS_PRIORITY, NODE_ID, SERVICE_ID};
+use crate::protocol::names::{MANAGER_TYPE, MSG_TYPE_STR, ID, WAIT_RECEIPT, SEQ_ID, LONG_SMS_TOTAL, SRC_ID, DEST_ID, DEST_IDS, LONG_SMS_NOW_NUMBER, MSG_ID, MSG_CONTENT, MSG_IDS, RECEIVE_TIME, ENTITY_ID, SEQ_IDS, IS_PRIORITY, SP_ID, SERVICE_ID};
 use crate::protocol::MsgType;
-use crate::global::{message_sender, TOPIC_TO_B_SUBMIT, TOPIC_TO_B_DELIVER, TOPIC_TO_B_DELIVER_RESP, TOPIC_TO_B_SUBMIT_RESP, TOPIC_TO_B_REPORT_RESP, TOPIC_TO_B_REPORT, TOPIC_TO_B_FAILURE};
+use crate::global::{TEMP_SAVE, message_sender, TOPIC_TO_B_SUBMIT, TOPIC_TO_B_DELIVER, TOPIC_TO_B_DELIVER_RESP, TOPIC_TO_B_SUBMIT_RESP, TOPIC_TO_B_REPORT_RESP, TOPIC_TO_B_REPORT, TOPIC_TO_B_FAILURE};
 use crate::message_queue::KafkaMessageProducer;
 use std::ops::{Add};
+use std::sync::atomic::AtomicU8;
+use std::sync::atomic::Ordering::SeqCst;
 
 struct EntityRunContext {
 	entity_id: u32,
 	service_id: String,
-	node_id: u32,
+	sp_id: String,
 	index: usize,
 	send_channels: Vec<ChannelStates>,
 	wait_receipt_map: HashMap<u64, JsonValue>,
 	long_sms_cache: HashMap<String, Vec<Option<JsonValue>>>,
 	to_queue: Arc<KafkaMessageProducer>,
-	manager_channels: Arc<RwLock<Vec<ChannelStates>>>,
+	now_conn_num: Arc<AtomicU8>,
 }
 
-pub async fn start_entity(mut manager_to_entity_rx: mpsc::Receiver<JsonValue>, mut from_channel: mpsc::Receiver<JsonValue>, channels: Arc<RwLock<Vec<ChannelStates>>>, entity_id: u32, service_id: String, node_id: u32) {
+pub async fn start_entity(mut manager_to_entity_rx: mpsc::Receiver<JsonValue>, mut from_channel: mpsc::Receiver<JsonValue>, entity_id: u32, service_id: String, sp_id: String,
+                          now_conn_num: Arc<AtomicU8>) {
 	let mut context = EntityRunContext {
 		entity_id,
 		service_id,
-		node_id,
+		sp_id,
 		index: 0,
 		send_channels: Vec::new(),
 		wait_receipt_map: HashMap::new(),
 		long_sms_cache: HashMap::new(),
 		to_queue: message_sender().clone(),
-		manager_channels: channels,
+		now_conn_num,
 	};
 
 	let mut timestamp = chrono::Local::now().timestamp();
@@ -51,7 +54,9 @@ pub async fn start_entity(mut manager_to_entity_rx: mpsc::Receiver<JsonValue>, m
 				}
 			}
 			from_channel_msg = from_channel.recv() => {
-				handle_from_channel_rx(from_channel_msg,&mut context).await;
+			if !handle_from_channel_rx(from_channel_msg,&mut context).await{
+					return;
+				}
 			}
 		}
 	}
@@ -78,11 +83,11 @@ fn clear_long_sms_cache(cache: &mut HashMap<String, Vec<Option<JsonValue>>>) {
 }
 
 ///entity处理来自于通道端的消息
-async fn handle_from_channel_rx(msg: Option<JsonValue>, context: &mut EntityRunContext) {
+async fn handle_from_channel_rx(msg: Option<JsonValue>, context: &mut EntityRunContext) -> bool {
 	match msg {
 		None => {
-			log::info!("发送端已经全部退出。退出。");
-			return;
+			log::info!("发送端已经全部退出。退出。id:{}", context.entity_id);
+			return false;
 		}
 		Some(mut msg) => {
 			msg[RECEIVE_TIME] = chrono::Local::now().timestamp().into();
@@ -141,19 +146,33 @@ async fn handle_from_channel_rx(msg: Option<JsonValue>, context: &mut EntityRunC
 							let id = match msg[ID].as_usize() {
 								None => {
 									log::error!("未收到关闭请求过来的id。msg:{}", msg);
-									return;
+									//这里只是退出当前操作
+									return true;
 								}
 								Some(v) => v
 							};
 
 							//保留除当前通道外其余通道
 							context.send_channels.retain(|item| item.id != id);
-							let mut channels = context.manager_channels.write().await;
-							if let Some(mut item) = channels.get_mut(id) {
-								item.can_write = false;
-								item.is_active = false;
-								item.entity_to_channel_common_tx = None;
-								item.entity_to_channel_priority_tx = None;
+							context.now_conn_num.swap(context.send_channels.len() as u8, SeqCst);
+						}
+						(MsgType::Connect, _) => {
+							if let Some(ind) = msg["channel_id"].as_u32() {
+								let mut save = TEMP_SAVE.write().await;
+								if let Some((entity_to_channel_priority_tx, entity_to_channel_common_tx)) = save.remove(&ind) {
+									context.send_channels.push(ChannelStates {
+										id: ind as usize,
+										is_active: true,
+										can_write: true,
+										entity_to_channel_priority_tx,
+										entity_to_channel_common_tx,
+									});
+									context.now_conn_num.swap(context.send_channels.len() as u8, SeqCst);
+								} else {
+									log::error!("收到通道创建消息.但没有在临时存放里面找到它.msg:{}", msg);
+								}
+							} else {
+								log::error!("收到通道创建消息.但没有channel_id字段.msg:{}", msg);
 							}
 						}
 						_ => {}
@@ -165,6 +184,8 @@ async fn handle_from_channel_rx(msg: Option<JsonValue>, context: &mut EntityRunC
 			}
 		}
 	}
+
+	true
 }
 
 fn get_key(msg: &JsonValue) -> u64 {
@@ -275,40 +296,14 @@ async fn handle_from_manager_rx(msg: Option<JsonValue>, context: &mut EntityRunC
 		}
 		Some(msg) => {
 			match msg[MANAGER_TYPE].as_str() {
-				Some("create") => {
-					let entity_id = msg[ENTITY_ID].as_u32().unwrap();
-					let channel_id = msg[CHANNEL_ID].as_usize().unwrap();
-					let manager = EntityManager::get_entity_manager();
-					let entitys = manager.entitys.read().await;
-
-					if let Some(entity) = entitys.get(&entity_id) {
-						let entity = entity.get_channels();
-						let entity = entity.read().await;
-						if let Some(channel) = entity.get(channel_id) {
-							context.send_channels.push(ChannelStates {
-								id: channel_id,
-								is_active: true,
-								can_write: true,
-								entity_to_channel_priority_tx: Some(channel.entity_to_channel_priority_tx.as_ref().unwrap().clone()),
-								entity_to_channel_common_tx: Some(channel.entity_to_channel_common_tx.as_ref().unwrap().clone()),
-							});
-						} else {
-							log::error!("没有找到对应的channel..msg:{}", msg);
-						}
-					} else {
-						log::error!("没有找到对应的entity..msg:{}", msg);
-					}
-				}
 				Some("close") => {
 					log::debug!("开始进行实体的关闭操作。");
 
 					for channel in context.send_channels.iter() {
-						if let Some(sender) = &channel.entity_to_channel_priority_tx {
-							if let Err(e) = sender.send(json::parse(r#"{msg_type:"close"}"#).unwrap()).await {
-								log::error!("发送关闭消息出现异常.e:{}", e);
-							} else {
-								log::error!("当前通道的发送队列为空...entity:{}", context.entity_id);
-							}
+						if let Err(e) = channel.entity_to_channel_priority_tx.send(json::parse(r#"{"msg_type":"Terminate"}"#).unwrap()).await {
+							log::error!("发送关闭消息出现异常.e:{}", e);
+						} else {
+							log::error!("当前通道的发送队列为空...entity:{}", context.entity_id);
 						}
 					}
 					return false;
@@ -333,10 +328,8 @@ async fn send_to_channels(msg: JsonValue, context: &mut EntityRunContext) {
 	//有可以选择发送的通道
 	let mut send_msg = msg;
 
-	if context.node_id > 0 {
-		send_msg[NODE_ID] = context.node_id.into();
-	}
-	if !context.service_id.is_empty(){
+	send_msg[SP_ID] = context.sp_id.as_str().into();
+	if !context.service_id.is_empty() {
 		send_msg[SERVICE_ID] = context.service_id.as_str().into();
 	}
 
@@ -364,39 +357,27 @@ async fn send_to_channels(msg: JsonValue, context: &mut EntityRunContext) {
 
 				Some(se) => se
 			};
+			log::debug!("收到消息.分channel发送。通道:{}.msg:{}", &select.id, &send_msg);
 
 			if send_msg[IS_PRIORITY].as_bool().unwrap_or(false) {
-				if let Some(sender) = &select.entity_to_channel_priority_tx {
-					if let Err(e) = sender.send(send_msg).await {
-						log::error!("发送正常消息出现异常.e:{}", e);
+				if let Err(e) = select.entity_to_channel_priority_tx.send(send_msg).await {
+					log::error!("发送正常消息出现异常.e:{}", e);
 
-						failure = Some((e.0, select.id));
-					}
+					failure = Some((e.0, select.id));
 				}
 			} else {
-				if let Some(sender) = &select.entity_to_channel_common_tx {
-					if let Err(e) = sender.send(send_msg).await {
-						log::error!("发送正常消息出现异常.e:{}", e);
+				if let Err(e) = select.entity_to_channel_common_tx.send(send_msg).await {
+					log::error!("发送正常消息出现异常.e:{}", e);
 
-						failure = Some((e.0, select.id));
-					}
+					failure = Some((e.0, select.id));
 				}
 			}
 		}
 
 		if let Some((json, channel_id)) = failure {
 			// 对端可能已经关闭.当前的通道已经不可用,删除通道并且重选.
-			context.send_channels.remove(index);
-			{
-				let mut channels = context.manager_channels.write().await;
-				if let Some(mut item) = channels.get_mut(channel_id) {
-					item.can_write = false;
-					item.is_active = false;
-					item.entity_to_channel_common_tx = None;
-					item.entity_to_channel_priority_tx = None;
-				}
-			}
-
+			context.send_channels.retain(|item| item.id != channel_id);
+			context.now_conn_num.swap(context.send_channels.len() as u8, SeqCst);
 			send_msg = json;
 		} else {
 			return;

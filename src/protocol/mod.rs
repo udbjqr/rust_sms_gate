@@ -1,7 +1,7 @@
 use core::result;
 use std::fmt::{Display, Formatter};
 
-use bytes::{BytesMut, };
+use bytes::{BytesMut};
 use json::JsonValue;
 use tokio::io;
 
@@ -10,7 +10,7 @@ pub use crate::protocol::msg_type::SmsStatus;
 
 pub use self::cmpp48::Cmpp48;
 pub use self::sgip::Sgip;
-use crate::protocol::names::{MSG_TYPE_U32};
+use crate::protocol::names::{MSG_TYPE_U32, MSG_TYPE_STR};
 use tokio_util::codec::{Encoder, Decoder};
 use crate::protocol::cmpp32::Cmpp32;
 use futures::io::Error;
@@ -74,7 +74,7 @@ impl Protocol {
 
 	///给定一个版本号。返回与版本号相对应的操作类型
 	pub fn get_protocol(name: &str, version: u32) -> Protocol {
-		match (name, version) {
+		match (name.to_uppercase().as_str(), version) {
 			("CMPP", 48) => Protocol::CMPP48(Cmpp48::new()),
 			("CMPP", 32) => Protocol::CMPP32(Cmpp32::new()),
 			("SGIP", _) => Protocol::SGIP(Sgip::new()),
@@ -115,8 +115,11 @@ impl Protocol {
 	///生成实体过来.这里应该是由实体发送来的消息.其他的不在这里。
 	pub fn encode_message(&self, json: &mut JsonValue) -> Result<BytesMut, Error> {
 		match self {
-			Protocol::CMPP48(obj) => match json[MSG_TYPE_U32].as_str() {
-				None => Err(Error::new(io::ErrorKind::NotFound, format!("没有找到指定的type.json:{}", json))),
+			Protocol::CMPP48(obj) => match json[MSG_TYPE_STR].as_str() {
+				None => {
+					log::error!("解码出错..没有msg_type_str..msg:{}", json);
+					Err(Error::new(io::ErrorKind::NotFound, format!("没有找到指定的type.json:{}", json)))
+				}
 				Some(msg_type) => {
 					match msg_type.into() {
 						MsgType::Connect => obj.encode_connect(json),
@@ -124,12 +127,18 @@ impl Protocol {
 						MsgType::Deliver => obj.encode_deliver(json),
 						MsgType::Report => obj.encode_report(json),
 						MsgType::ActiveTest => obj.encode_active_test(json),
-						_ => Err(io::Error::new(io::ErrorKind::Other, "还未实现")),
+						_ => {
+							log::error!("解码出错..未知的.msg_type..msg:{}", json);
+							Err(io::Error::new(io::ErrorKind::Other, "还未实现"))
+						}
 					}
 				}
 			}
-			Protocol::CMPP32(obj) => match json[MSG_TYPE_U32].as_str() {
-				None => Err(Error::new(io::ErrorKind::NotFound, format!("没有找到指定的type.json:{}", json))),
+			Protocol::CMPP32(obj) => match json[MSG_TYPE_STR].as_str() {
+				None => {
+					log::error!("解码出错..没有msg_type_str..msg:{}", json);
+					Err(Error::new(io::ErrorKind::NotFound, format!("没有找到指定的type.json:{}", json)))
+				}
 				Some(msg_type) => {
 					match msg_type.into() {
 						MsgType::Connect => obj.encode_connect(json),
@@ -137,12 +146,18 @@ impl Protocol {
 						MsgType::Deliver => obj.encode_deliver(json),
 						MsgType::Report => obj.encode_report(json),
 						MsgType::ActiveTest => obj.encode_active_test(json),
-						_ => Err(io::Error::new(io::ErrorKind::Other, "还未实现")),
+						_ => {
+							log::error!("解码出错..未知的.msg_type..msg:{}", json);
+							Err(io::Error::new(io::ErrorKind::Other, "还未实现"))
+						}
 					}
 				}
 			}
-			Protocol::SMGP(obj) => match json[MSG_TYPE_U32].as_str() {
-				None => Err(Error::new(io::ErrorKind::NotFound, format!("没有找到指定的type.json:{}", json))),
+			Protocol::SMGP(obj) => match json[MSG_TYPE_STR].as_str() {
+				None => {
+					log::error!("解码出错..没有msg_type_str..msg:{}", json);
+					Err(Error::new(io::ErrorKind::NotFound, format!("没有找到指定的type.json:{}", json)))
+				}
 				Some(msg_type) => {
 					match msg_type.into() {
 						MsgType::Connect => obj.encode_connect(json),
@@ -150,12 +165,18 @@ impl Protocol {
 						MsgType::Deliver => obj.encode_deliver(json),
 						MsgType::Report => obj.encode_report(json),
 						MsgType::ActiveTest => obj.encode_active_test(json),
-						_ => Err(io::Error::new(io::ErrorKind::Other, "还未实现")),
+						_ => {
+							log::error!("解码出错..未知的.msg_type..msg:{}", json);
+							Err(io::Error::new(io::ErrorKind::Other, "还未实现"))
+						}
 					}
 				}
 			}
-			Protocol::SGIP(obj) => match json[MSG_TYPE_U32].as_str() {
-				None => Err(Error::new(io::ErrorKind::NotFound, format!("没有找到指定的type.json:{}", json))),
+			Protocol::SGIP(obj) => match json[MSG_TYPE_STR].as_str() {
+				None => {
+					log::error!("解码出错..没有msg_type_str..msg:{}", json);
+					Err(Error::new(io::ErrorKind::NotFound, format!("没有找到指定的type.json:{}", json)))
+				}
 				Some(msg_type) => {
 					match msg_type.into() {
 						MsgType::Connect => obj.encode_connect(json),
@@ -163,12 +184,18 @@ impl Protocol {
 						MsgType::Deliver => obj.encode_deliver(json),
 						MsgType::Report => obj.encode_report(json),
 						MsgType::ActiveTest => obj.encode_active_test(json),
-						_ => Err(io::Error::new(io::ErrorKind::Other, "还未实现")),
+						_ => {
+							log::error!("解码出错..未知的.msg_type..msg:{}", json);
+							Err(io::Error::new(io::ErrorKind::Other, "还未实现"))
+						}
 					}
 				}
 			}
-			Protocol::SMPP(obj) => match json[MSG_TYPE_U32].as_str() {
-				None => Err(Error::new(io::ErrorKind::NotFound, format!("没有找到指定的type.json:{}", json))),
+			Protocol::SMPP(obj) => match json[MSG_TYPE_STR].as_str() {
+				None => {
+					log::error!("解码出错..没有msg_type_str..msg:{}", json);
+					Err(Error::new(io::ErrorKind::NotFound, format!("没有找到指定的type.json:{}", json)))
+				}
 				Some(msg_type) => {
 					match msg_type.into() {
 						MsgType::Connect => obj.encode_connect(json),
@@ -176,7 +203,10 @@ impl Protocol {
 						MsgType::Deliver => obj.encode_deliver(json),
 						MsgType::Report => obj.encode_report(json),
 						MsgType::ActiveTest => obj.encode_active_test(json),
-						_ => Err(io::Error::new(io::ErrorKind::Other, "还未实现")),
+						_ => {
+							log::error!("解码出错..未知的.msg_type..msg:{}", json);
+							Err(io::Error::new(io::ErrorKind::Other, "还未实现"))
+						}
 					}
 				}
 			}
@@ -198,7 +228,7 @@ impl Protocol {
 					MsgType::Report => obj.encode_report_resp(status, json),
 					MsgType::ActiveTest => obj.encode_active_test_resp(status, json),
 					_ => {
-						log::error!("未生成的返回对象.json:{}", json);
+						log::error!("CMPP48未生成的返回对象.json:{}", json);
 						None
 					}
 				}
@@ -211,7 +241,7 @@ impl Protocol {
 					MsgType::Report => obj.encode_report_resp(status, json),
 					MsgType::ActiveTest => obj.encode_active_test_resp(status, json),
 					_ => {
-						log::error!("未生成的返回对象.json:{}", json);
+						log::error!("CMPP32未生成的返回对象.json:{}", json);
 						None
 					}
 				}
@@ -224,7 +254,7 @@ impl Protocol {
 					MsgType::Report => obj.encode_report_resp(status, json),
 					MsgType::ActiveTest => obj.encode_active_test_resp(status, json),
 					_ => {
-						log::error!("未生成的返回对象.json:{}", json);
+						log::error!("SMGP未生成的返回对象.json:{}", json);
 						None
 					}
 				}
@@ -237,7 +267,7 @@ impl Protocol {
 					MsgType::Report => obj.encode_report_resp(status, json),
 					MsgType::ActiveTest => obj.encode_active_test_resp(status, json),
 					_ => {
-						log::error!("未生成的返回对象.json:{}", json);
+						log::error!("SGIP未生成的返回对象.json:{}", json);
 						None
 					}
 				}
@@ -250,7 +280,7 @@ impl Protocol {
 					MsgType::Report => obj.encode_report_resp(status, json),
 					MsgType::ActiveTest => obj.encode_active_test_resp(status, json),
 					_ => {
-						log::error!("未生成的返回对象.json:{}", json);
+						log::error!("SMPP未生成的返回对象.json:{}", json);
 						None
 					}
 				}
@@ -275,6 +305,7 @@ impl Encoder<BytesMut> for Protocol {
 	fn encode(&mut self, item: BytesMut, dst: &mut BytesMut) -> Result<(), Self::Error> {
 		dst.extend_from_slice(&item);
 
+		log::trace!("打印一下发送的字节码..{:X}", dst);
 		Ok(())
 	}
 }

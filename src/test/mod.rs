@@ -1,17 +1,14 @@
+#![allow(unused)]
+
 use chrono::{DateTime, Local, Datelike, Timelike};
 mod entity;
 
+
 #[test]
-fn test_time() {
-	let local: DateTime<Local> = Local::now();
-	let mut time: u32 = local.month();
-	time = time * 100 + local.day();
-	time = time * 100 + local.hour();
-	time = time * 100 + local.minute();
-	time = time * 100 + local.second();
+fn test_json() {
+	simple_logger::SimpleLogger::new().init().unwrap();
+	// let json = json::parse(r#"{"id":23,"login_name":10682203,"address":"47.114.180.42:7890","password":123456,"version":"48","name":"测试通道"}"#).unwrap();
 
-	let time_str = format!("{:010}", time);
-
-	dbg!(time,time_str);
+	log::error!("12341234123412341");
 }
 

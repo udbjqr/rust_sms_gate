@@ -4,7 +4,7 @@ use bytes::{BytesMut, BufMut, Buf};
 use tokio::io;
 use crate::protocol::{SmsStatus, MsgType};
 use json::JsonValue;
-use crate::protocol::names::{LOGIN_NAME, PASSWORD, VERSION, MSG_TYPE_U32, SEQ_ID, USER_ID, AUTHENTICATOR, MSG_CONTENT, SERVICE_ID, VALID_TIME, AT_TIME, SRC_ID, DEST_IDS, SEQ_IDS, MSG_FMT, MSG_ID, RESULT, NODE_ID, DEST_ID, RECEIVE_TIME, SUBMIT_TIME, DONE_TIME, STATE, ERROR_CODE, RESP_NODE_ID, TEXT};
+use crate::protocol::names::{LOGIN_NAME, PASSWORD, VERSION, MSG_TYPE_U32, SEQ_ID, USER_ID, AUTHENTICATOR, MSG_CONTENT, SERVICE_ID, VALID_TIME, AT_TIME, SRC_ID, DEST_IDS, SEQ_IDS, MSG_FMT, MSG_ID, RESULT, SP_ID, DEST_ID, RECEIVE_TIME, SUBMIT_TIME, DONE_TIME, STATE, ERROR_CODE, RESP_NODE_ID, TEXT};
 use crate::protocol::msg_type::MsgType::{Connect, SubmitResp};
 use std::io::Error;
 use encoding::all::UTF_16BE;
@@ -538,7 +538,7 @@ impl ProtocolImpl for Smgp {
 
 		let mut msg_id_buf = buf.split_to(10);
 		let (ismg_id, msg_id) = self.decode_msg_id(&mut msg_id_buf);
-		json[NODE_ID] = ismg_id.into();
+		json[SP_ID] = ismg_id.into();
 		json[MSG_ID] = msg_id.into();
 		json[RESULT] = buf.get_u32().into();//result 4
 
@@ -552,7 +552,7 @@ impl ProtocolImpl for Smgp {
 
 		let mut msg_id_buf = buf.split_to(10);
 		let (ismg_id, msg_id) = self.decode_msg_id(&mut msg_id_buf);
-		json[NODE_ID] = ismg_id.into();
+		json[SP_ID] = ismg_id.into();
 		json[MSG_ID] = msg_id.into();
 		let is_report = buf.get_u8(); //Registered_Delivery	1
 		let msg_fmt = buf.get_u8();
@@ -579,7 +579,7 @@ impl ProtocolImpl for Smgp {
 		} else {
 			let mut msg_id_buf = buf.split_to(10);
 			let (ismg_id, msg_id) = self.decode_msg_id(&mut msg_id_buf);
-			json[NODE_ID] = ismg_id.into();
+			json[SP_ID] = ismg_id.into();
 			json[MSG_ID] = msg_id.into();
 			buf.advance(6); //sub 3  Dlvrd 3
 			json[SUBMIT_TIME] = load_utf8_string(buf, 10).into(); // Submit_time
@@ -732,7 +732,7 @@ impl Smgp {
 				SmgpTLV::LinkID(b) |
 				SmgpTLV::ChargeTermPseudo(b) => {
 					buf.put_u16(b.len() as u16);
-					buf.extend_from_slice(b);
+					buf.extend_from_slice(b.as_ref());
 				}
 			}
 		}

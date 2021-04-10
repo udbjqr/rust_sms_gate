@@ -44,7 +44,7 @@ impl Channel {
 
 	///开启通道连接动作。这个动作在通道已经连通以后进行
 	pub async fn start_connect(&mut self, id: u32, login_msg: JsonValue) -> Result<(), io::Error> {
-		info!("启动Channel.开始连接服务端。");
+		info!("启动Channel.开始连接服务端。login_msg:{}", login_msg);
 
 		let addr = match login_msg[ADDRESS].as_str() {
 			Some(v) => {
@@ -67,6 +67,7 @@ impl Channel {
 		let mut framed = Framed::new(stream, self.protocol.clone());
 
 		if let Err(e) = self.connect(&mut framed, id, login_msg, ip_addr).await {
+			log::info!("这里收到登录异常??");
 			return Err(e);
 		};
 
@@ -79,7 +80,10 @@ impl Channel {
 	async fn connect(&mut self, framed: &mut Framed<TcpStream, Protocol>, id: u32, mut login_msg: JsonValue, ip_addr: IpAddr) -> Result<(), io::Error> {
 		match self.protocol.encode_message(&mut login_msg) {
 			Ok(msg) => framed.send(msg).await?,
-			Err(e) => error!("生成消息出现异常。{}", e),
+			Err(e) => {
+				error!("生成消息出现异常。{}", e);
+				return Err(io::Error::new(io::ErrorKind::InvalidData, e));
+			}
 		}
 
 		match framed.next().await {
@@ -135,6 +139,8 @@ impl Channel {
 	/// 这里应该已经处理完接收和发送的消息。
 	/// 送到这里的都是单个短信的消息
 	async fn start_work(&mut self, framed: &mut Framed<TcpStream, Protocol>) {
+		log::debug!("连接成功.channel准备处理数据.{}", self.id);
+
 		let mut active_test = json::object! {
 					msg_type : "ActiveTest"
 		};
@@ -146,16 +152,13 @@ impl Channel {
 			return;
 		};
 
-		if !self.need_approve {
+		if self.need_approve {
 			error!("还未进行认证。退出");
 			return;
 		}
 
 		let entity_to_channel_priority_rx = self.entity_to_channel_priority_rx.as_mut().unwrap();
 		let entity_to_channel_common_rx = self.entity_to_channel_common_rx.as_mut().unwrap();
-
-		let sleep = time::sleep(Duration::from_millis(1000));
-		tokio::pin!(sleep);
 
 		//上一次执行的时间戳
 		let mut curr_tx: u32 = 0;
@@ -230,10 +233,11 @@ impl Channel {
 						}
 				  }
 				}
-				send = entity_to_channel_priority_rx.recv(),if curr_tx < self.tx_limit => {
+				msg = entity_to_channel_priority_rx.recv(),if curr_tx < self.tx_limit => {
 					idle_count = 0;
-					match send {
+					match msg {
 						Some(mut send) => {
+							log::debug!("priority收到entity发来的消息.msg:{}",send);
 							//接收发来的消息。并处理
 							if let Ok(msg) = self.protocol.encode_message(&mut send) {
 								if let Err(e) = framed.send(msg).await {
@@ -251,15 +255,16 @@ impl Channel {
 							}
 						}
 						None => {
-							warn!("通道已经被关闭。直接退出。");
+							warn!("实体向通道(优先)已经被关闭。直接退出。");
 							return;
 						}
 					}
 				}
-				send = entity_to_channel_common_rx.recv(),if curr_tx < self.tx_limit => {
+				msg = entity_to_channel_common_rx.recv(),if curr_tx < self.tx_limit => {
 					idle_count = 0;
-					match send {
+					match msg {
 						Some(mut send) => {
+							log::debug!("common收到entity发来的消息.msg:{}",send);
 							//接收发来的消息。并处理
 							if let Ok(msg) = self.protocol.encode_message(&mut send) {
 								if let Err(e) = framed.send(msg).await {
@@ -277,12 +282,12 @@ impl Channel {
 							}
 						}
 						None => {
-							warn!("通道已经被关闭。直接退出。");
+							warn!("实体向通道(普通)已经被关闭。直接退出。");
 							return;
 						}
 					}
 				}
-				_ = &mut sleep => {
+				_ = time::sleep(one_secs) => {
 					//这里就是用来当全部都没有动作的时间打开再次进行循环.
 					//空闲记数
 					idle_count = idle_count + 1;
@@ -363,8 +368,8 @@ impl Channel {
 		};
 
 		let manage = EntityManager::get_entity_manager();
-		let mut entitys = manage.entitys.write().await;
-		let entity = match entitys.get_mut(&id) {
+		let entitys = manage.entitys.read().await;
+		let entity = match entitys.get(&id) {
 			None => {
 				error!("user_id找不到对应的entity.");
 				return (SmsStatus::AuthError, login_info);

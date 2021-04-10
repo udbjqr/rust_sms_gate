@@ -22,7 +22,8 @@ pub trait ProtocolImpl: Send + Sync {
 		//先处理粘包和断包
 		match self.get_framed(buf) {
 			//这里直接用
-			Ok(Some(_)) => {
+			Ok(Some(mut buf)) => {
+				log::trace!("打印一下收到的消息. src:{:X}", buf);
 				//拿command
 				let tp = buf.get_u32();
 				//拿掉seq.对sgip来说.这里只是拿了node_id.还有2个没拿
@@ -30,16 +31,16 @@ pub trait ProtocolImpl: Send + Sync {
 
 				let msg_type = self.get_type_enum(tp);
 				let mut msg = match msg_type {
-					MsgType::Submit => self.decode_submit(buf, seq, tp)?,
-					MsgType::DeliverResp => self.decode_submit_or_deliver_resp(buf, seq, tp)?,
-					MsgType::SubmitResp => self.decode_submit_or_deliver_resp(buf, seq, tp)?,
-					MsgType::Deliver => self.decode_deliver(buf, seq, tp)?,
-					MsgType::ActiveTest | MsgType::ActiveTestResp => self.decode_nobody(buf, seq, tp)?,
-					MsgType::Connect => self.decode_connect(buf, seq, tp)?,
-					MsgType::ConnectResp => self.decode_connect_resp(buf, seq, tp)?,
-					MsgType::Terminate | MsgType::TerminateResp => self.decode_nobody(buf, seq, tp)?,
-					MsgType::Report => self.decode_report(buf, seq, tp)?,
-					MsgType::ReportResp => self.decode_report_resp(buf, seq, tp)?,
+					MsgType::Submit => self.decode_submit(&mut buf, seq, tp)?,
+					MsgType::DeliverResp => self.decode_submit_or_deliver_resp(&mut buf, seq, tp)?,
+					MsgType::SubmitResp => self.decode_submit_or_deliver_resp(&mut buf, seq, tp)?,
+					MsgType::Deliver => self.decode_deliver(&mut buf, seq, tp)?,
+					MsgType::ActiveTest | MsgType::ActiveTestResp => self.decode_nobody(&mut buf, seq, tp)?,
+					MsgType::Connect => self.decode_connect(&mut buf, seq, tp)?,
+					MsgType::ConnectResp => self.decode_connect_resp(&mut buf, seq, tp)?,
+					MsgType::Terminate | MsgType::TerminateResp => self.decode_nobody(&mut buf, seq, tp)?,
+					MsgType::Report => self.decode_report(&mut buf, seq, tp)?,
+					MsgType::ReportResp => self.decode_report_resp(&mut buf, seq, tp)?,
 					MsgType::Query |
 					MsgType::QueryResp |
 					MsgType::Cancel |
@@ -716,12 +717,20 @@ pub trait ProtocolImpl: Send + Sync {
 
 	fn decode_connect_resp(&self, buf: &mut BytesMut, seq: u32, tp: u32) -> Result<JsonValue, io::Error> {
 		let mut json = JsonValue::new_object();
+
 		json[MSG_TYPE_U32] = tp.into();
 		json[SEQ_ID] = seq.into();
-		json[STATUS] = buf.get_u32().into();
+
+		//21是已经减掉头的长度.cmpp3.0是21
+		if buf.len() < 21 {
+			//cmpp 2.0
+			json[STATUS] = buf.get_u8().into();
+		} else {
+			json[STATUS] = buf.get_u32().into();
+		}
+
 		buf.advance(16);
 		json[VERSION] = buf.get_u8().into();
-
 		Ok(json)
 	}
 

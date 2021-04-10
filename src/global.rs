@@ -10,6 +10,7 @@ use tokio::runtime::{Builder, Runtime};
 use tokio::sync::RwLock;
 
 use crate::message_queue::KafkaMessageProducer;
+use tokio::sync::mpsc::Sender;
 
 pub static TOPIC_ACCOUNT_MODIFY: &'static str = "account.modify";
 pub static TOPIC_ACCOUNT_ADD: &'static str = "account.add";
@@ -35,6 +36,7 @@ lazy_static! {
 	static ref SEQUENCE: AtomicU32 = AtomicU32::new(rand::random());
 	pub static ref FILL_ZERO: Vec<u8> = vec![0;200];
 	pub static ref ISMG_ID: u32 = rand::random::<u32>() % 1000000;
+		pub static ref TEMP_SAVE:RwLock<HashMap<u32,(Sender<JsonValue>,Sender<JsonValue>)>> = RwLock::new(HashMap::new());
 	// static ref SERVERS_CONFIG: RwLock<JsonValue> = RwLock::new(load_config_file("smsServer.json"));
 }
 
