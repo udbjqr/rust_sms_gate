@@ -244,7 +244,7 @@ async fn handle_queue_msg(topic: &str, mut json: JsonValue, context: &mut RunCon
 					json["desc"].as_str().unwrap_or("").to_string(),
 					json[LOGIN_NAME].as_str().unwrap_or("").to_string(),
 					json[PASSWORD].as_str().unwrap_or("").to_string(),
-					json[ALLOW_ADDRS].as_str().unwrap_or("").split(",").map(|s| s.to_string()).collect(),
+					json[ALLOW_ADDRS].as_str().unwrap_or("").to_string(),
 					json[READ_LIMIT].as_u32().unwrap_or(0xffffffff),
 					json[WRITE_LIMIT].as_u32().unwrap_or(0xffffffff),
 					json[MAX_CHANNEL_NUMBER].as_usize().unwrap_or(0xff),

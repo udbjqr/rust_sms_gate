@@ -5,12 +5,12 @@ use async_trait::async_trait;
 use json::JsonValue;
 use tokio::sync::{mpsc};
 
-use crate::entity::{ Entity, start_entity};
+use crate::entity::{Entity, start_entity};
 use crate::get_runtime;
 use crate::protocol::{SmsStatus, Protocol};
-use crate::protocol::names::VERSION;
+use crate::protocol::names::{VERSION, AUTHENTICATOR, TIMESTAMP};
 use std::net::{Ipv4Addr, IpAddr};
-use crate::global::{TEMP_SAVE,get_sequence_id};
+use crate::global::{TEMP_SAVE, get_sequence_id};
 
 #[derive(Debug)]
 pub struct CustomEntity {
@@ -23,7 +23,7 @@ pub struct CustomEntity {
 	read_limit: u32,
 	write_limit: u32,
 	max_channel_number: usize,
-	now_channel_number:Arc<AtomicU8>,
+	now_channel_number: Arc<AtomicU8>,
 	service_id: String,
 	sp_id: String,
 	config: JsonValue,
@@ -115,9 +115,9 @@ impl Entity for CustomEntity {
 		let index = get_sequence_id(1);
 
 		let mut save = TEMP_SAVE.write().await;
-		save.insert(index,(entity_to_channel_priority_tx,entity_to_channel_common_tx));
+		save.insert(index, (entity_to_channel_priority_tx, entity_to_channel_common_tx));
 		let msg = json::object! {
-			manager_type : "create",
+			msg_type : "create",
 			entity_id : self.id,
 			channel_id : index,
 		};
@@ -133,26 +133,42 @@ impl Entity for CustomEntity {
 		self.id
 	}
 
+	fn get_login_name(&self) -> &str {
+		self.login_name.as_str()
+	}
+
+	fn get_password(&self) -> &str {
+		self.password.as_str()
+	}
+
 	fn get_allow_ips(&self) -> &str {
 		self.allowed_addr.as_str()
 	}
 }
 
 
-pub fn check_custom_login(json: &JsonValue, entity: &Box<(dyn Entity + 'static)>, protocol: &Protocol, ip_addr: IpAddr) -> Option<(SmsStatus, JsonValue)> {
+pub fn check_custom_login(json: &JsonValue, entity: &Box<(dyn Entity + 'static)>, protocol: &mut Protocol, ip_addr: IpAddr) -> Option<(SmsStatus, JsonValue)> {
 	//进行地址允许判断
 	if !check_addr_range(entity.get_allow_ips(), ip_addr) {
 		return Some((SmsStatus::AddError, json.clone()));
 	}
 
+	// 进行密码检验。
+	let my_auth = protocol.get_auth(entity.get_login_name(), entity.get_password(), json[TIMESTAMP].as_u32().unwrap_or(0));
 
-	//TODO 进行登录判断。
-	//TODO 进行密码检验。
+	let (_, my_auth) = my_auth.split_at(8);
+	let auth = u64::from_be_bytes(unsafe { *(my_auth as *const _  as *const [u8;8]) });
 
-	//进行版本检查
+	if auth != json[AUTHENTICATOR].as_u64().unwrap_or(0) {
+		return Some((SmsStatus::AuthError, json.clone()));
+	}
+
+	//进行版本检查.并且根据对方版本号进行修改
 	if let Some(version) = json[VERSION].as_u32() {
-		if protocol.is(version) {
+		if !protocol.has(version) {
 			return Some((SmsStatus::VersionError, json.clone()));
+		} else {
+			*protocol = protocol.match_version(version);
 		}
 	} else {
 		log::error!("附加至CustomEntity通道异常。json里面没有version。。json:{}", json);
@@ -165,6 +181,7 @@ pub fn check_custom_login(json: &JsonValue, entity: &Box<(dyn Entity + 'static)>
 
 ///检查ip地址是否在允许的范围内。true 在。false 不在
 fn check_addr_range(allow_ips: &str, now_ip: IpAddr) -> bool {
+	log::trace!("进行地址检查.来源地址:{}..允许的地址.{}", now_ip, allow_ips);
 	//ipv6目前不处理。
 	let ip_v = match now_ip {
 		IpAddr::V4(ip) => {

@@ -27,6 +27,8 @@ pub trait Entity: Send + Sync + Debug {
 	async fn login_attach(&self) -> (usize, SmsStatus, u32, u32, Option<mpsc::Receiver<JsonValue>>, Option<mpsc::Receiver<JsonValue>>, Option<mpsc::Sender<JsonValue>>);
 
 	fn get_id(&self) -> u32;
+	fn get_login_name(&self) -> &str;
+	fn get_password(&self) -> &str;
 	fn get_allow_ips(&self) -> &str;
 }
 

@@ -1,6 +1,6 @@
 {
 	"bootstrap": {
-		"servers": "192.168.101.99:9092"
+		"servers": "118.31.45.242:9092"
 	},
 	"client": {
 		"id": "asServer"

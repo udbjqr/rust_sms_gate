@@ -339,18 +339,12 @@ impl ProtocolImpl for Cmpp32 {
 
 		let valid_time = match json[VALID_TIME].as_str() {
 			Some(v) => v,
-			None => {
-				log::error!("没有valid_time.退出..json:{}", json);
-				return Err(io::Error::new(io::ErrorKind::NotFound, "没有valid_time"));
-			}
+			None => "",
 		};
 
 		let at_time = match json[AT_TIME].as_str() {
 			Some(v) => v,
-			None => {
-				log::error!("没有at_time.退出..json:{}", json);
-				return Err(io::Error::new(io::ErrorKind::NotFound, "没有at_time"));
-			}
+			None => "",
 		};
 
 		let src_id = match json[SRC_ID].as_str() {
@@ -389,7 +383,7 @@ impl ProtocolImpl for Cmpp32 {
 
 		//长短信的话,一次性生成多条记录
 		//136是除开内容\发送号码之后所有长度加在一起 6是长短信消息头长度
-		let total_len = sms_len * (136 + dest_ids.len() * 21 + msg_content_head_len) + msg_content_len;
+		let total_len = sms_len * (138 + dest_ids.len() * 21 + msg_content_head_len) + msg_content_len;
 
 		let mut dst = BytesMut::with_capacity(total_len);
 		let mut seq_ids = Vec::with_capacity(sms_len);
@@ -401,7 +395,7 @@ impl ProtocolImpl for Cmpp32 {
 				&msg_content_code[(i * one_content_len)..((i + 1) * one_content_len)]
 			};
 
-			dst.put_u32((136 + dest_ids.len() * 21 + msg_content_head_len + this_msg_content.len()) as u32);
+			dst.put_u32((138 + dest_ids.len() * 21 + msg_content_head_len + this_msg_content.len()) as u32);
 			dst.put_u32(self.get_type_id(MsgType::Submit));
 			let seq_id = get_sequence_id(dest_ids.len() as u32);
 			seq_ids.push(seq_id);
@@ -444,10 +438,11 @@ impl ProtocolImpl for Cmpp32 {
 	}
 
 
-	fn decode_submit_or_deliver_resp(&self, buf: &mut BytesMut, _seq: u32, tp: u32) -> Result<JsonValue, io::Error> {
+	fn decode_submit_or_deliver_resp(&self, buf: &mut BytesMut, seq: u32, tp: u32) -> Result<JsonValue, io::Error> {
 		let mut json = JsonValue::new_object();
 
 		json[MSG_TYPE_U32] = tp.into();
+		json[SEQ_ID] = seq.into();
 		json[MSG_ID] = buf.get_u64().into();//msg_id 8
 		json[RESULT] = (buf.get_u8() as u32).into();//result 1
 
@@ -469,6 +464,8 @@ impl ProtocolImpl for Cmpp32 {
 		json[SRC_ID] = load_utf8_string(buf, 21).into(); //src_id 21
 		let is_report = buf.get_u8(); //Registered_Delivery	1
 		if is_report == 0 {
+			//是状态报告.修改一下返回的类型.
+			json[MSG_TYPE_U32] = self.get_type_id(MsgType::Report).into();
 			//长短信的处理 tp_udhi != 0 说明是长短信
 			json[MSG_FMT] = msg_fmt.into(); //Msg_Fmt 1
 			let msg_content_len = buf.get_u8(); //Msg_Length	1

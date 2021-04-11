@@ -87,14 +87,31 @@ impl Protocol {
 		}
 	}
 
-	pub fn is(&self, version: u32) -> bool {
+	pub fn has(&self, version: u32) -> bool {
 		match self {
-			Protocol::CMPP48(_) => version == 48,
-			Protocol::CMPP32(_) => version == 32,
+			Protocol::CMPP48(_) |
+			Protocol::CMPP32(_) => {
+				version == 32 || version == 48
+			}
 			SMGP(_) => true,
 			Protocol::SGIP(_) => true,
 			Protocol::SMPP(_) => true,
 			Protocol::None => false
+		}
+	}
+
+
+	pub fn get_auth(&self, login_name: &str, password: &str, timestamp: u32) -> [u8; 16] {
+		match self {
+			Protocol::CMPP48(obj) => obj.get_auth(login_name, password, timestamp),
+			Protocol::CMPP32(obj) => obj.get_auth(login_name, password, timestamp),
+			Protocol::SMGP(obj) => obj.get_auth(login_name, password, timestamp),
+			Protocol::SGIP(obj) => obj.get_auth(login_name, password, timestamp),
+			Protocol::SMPP(obj) => obj.get_auth(login_name, password, timestamp),
+			Protocol::None => {
+				log::error!("当前操作不可用。");
+				[0u8;16]
+			}
 		}
 	}
 
@@ -227,10 +244,7 @@ impl Protocol {
 					MsgType::Deliver => obj.encode_deliver_resp(status, json),
 					MsgType::Report => obj.encode_report_resp(status, json),
 					MsgType::ActiveTest => obj.encode_active_test_resp(status, json),
-					_ => {
-						log::error!("CMPP48未生成的返回对象.json:{}", json);
-						None
-					}
+					_ => None,
 				}
 			}
 			Protocol::CMPP32(obj) => {
@@ -240,10 +254,7 @@ impl Protocol {
 					MsgType::Deliver => obj.encode_deliver_resp(status, json),
 					MsgType::Report => obj.encode_report_resp(status, json),
 					MsgType::ActiveTest => obj.encode_active_test_resp(status, json),
-					_ => {
-						log::error!("CMPP32未生成的返回对象.json:{}", json);
-						None
-					}
+					_ => None,
 				}
 			}
 			Protocol::SMGP(obj) => {
@@ -253,10 +264,7 @@ impl Protocol {
 					MsgType::Deliver => obj.encode_deliver_resp(status, json),
 					MsgType::Report => obj.encode_report_resp(status, json),
 					MsgType::ActiveTest => obj.encode_active_test_resp(status, json),
-					_ => {
-						log::error!("SMGP未生成的返回对象.json:{}", json);
-						None
-					}
+					_ => None,
 				}
 			}
 			Protocol::SGIP(obj) => {
@@ -266,10 +274,7 @@ impl Protocol {
 					MsgType::Deliver => obj.encode_deliver_resp(status, json),
 					MsgType::Report => obj.encode_report_resp(status, json),
 					MsgType::ActiveTest => obj.encode_active_test_resp(status, json),
-					_ => {
-						log::error!("SGIP未生成的返回对象.json:{}", json);
-						None
-					}
+					_ => None,
 				}
 			}
 			Protocol::SMPP(obj) => {
@@ -279,10 +284,7 @@ impl Protocol {
 					MsgType::Deliver => obj.encode_deliver_resp(status, json),
 					MsgType::Report => obj.encode_report_resp(status, json),
 					MsgType::ActiveTest => obj.encode_active_test_resp(status, json),
-					_ => {
-						log::error!("SMPP未生成的返回对象.json:{}", json);
-						None
-					}
+					_ => None,
 				}
 			}
 			Protocol::None => {

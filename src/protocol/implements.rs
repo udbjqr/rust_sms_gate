@@ -11,7 +11,7 @@ use crate::global::FILL_ZERO;
 use crate::protocol::msg_type::MsgType::{Connect, SubmitResp};
 use tokio::io::Error;
 use crate::protocol::msg_type::SmsStatus;
-use crate::protocol::names::{SEQ_ID, AUTHENTICATOR, VERSION, STATUS, MSG_TYPE_U32, USER_ID, MSG_CONTENT, MSG_ID, SERVICE_ID, TP_UDHI, SP_ID, VALID_TIME, AT_TIME, SRC_ID, MSG_FMT, DEST_IDS, RESULT, DEST_ID, STATE, SUBMIT_TIME, DONE_TIME, SMSC_SEQUENCE, IS_REPORT, MSG_TYPE_STR, LONG_SMS_TOTAL, LONG_SMS_NOW_NUMBER, SEQ_IDS, LOGIN_NAME, PASSWORD};
+use crate::protocol::names::{SEQ_ID, AUTHENTICATOR, VERSION, STATUS, MSG_TYPE_U32, MSG_CONTENT, MSG_ID, SERVICE_ID, TP_UDHI, SP_ID, VALID_TIME, AT_TIME, SRC_ID, MSG_FMT, DEST_IDS, RESULT, DEST_ID, STATE, SUBMIT_TIME, DONE_TIME, SMSC_SEQUENCE, IS_REPORT, MSG_TYPE_STR, LONG_SMS_TOTAL, LONG_SMS_NOW_NUMBER, SEQ_IDS, LOGIN_NAME, PASSWORD, TIMESTAMP};
 use crate::protocol::MsgType;
 
 pub trait ProtocolImpl: Send + Sync {
@@ -264,9 +264,7 @@ pub trait ProtocolImpl: Send + Sync {
 		dst.put_u32(json[SEQ_ID].as_u32().unwrap());
 		dst.put_u32(self.get_status_id(&status));
 
-		let str = json[AUTHENTICATOR].as_str().unwrap().as_bytes();
-
-		dst.extend_from_slice(&str[0..16]);
+		dst.extend_from_slice(&FILL_ZERO[0..16]);
 		dst.put_u8(json[VERSION].as_u8().unwrap());
 
 		Some(dst)
@@ -606,18 +604,13 @@ pub trait ProtocolImpl: Send + Sync {
 
 		let valid_time = match json[VALID_TIME].as_str() {
 			Some(v) => v,
-			None => {
-				log::error!("没有valid_time.退出..json:{}", json);
-				return Err(io::Error::new(io::ErrorKind::NotFound, "没有valid_time"));
-			}
+			None => ""
+
 		};
 
 		let at_time = match json[AT_TIME].as_str() {
 			Some(v) => v,
-			None => {
-				log::error!("没有at_time.退出..json:{}", json);
-				return Err(io::Error::new(io::ErrorKind::NotFound, "没有at_time"));
-			}
+			None => ""
 		};
 
 		let src_id = match json[SRC_ID].as_str() {
@@ -734,10 +727,11 @@ pub trait ProtocolImpl: Send + Sync {
 		Ok(json)
 	}
 
-	fn decode_submit_or_deliver_resp(&self, buf: &mut BytesMut, _seq: u32, tp: u32) -> Result<JsonValue, io::Error> {
+	fn decode_submit_or_deliver_resp(&self, buf: &mut BytesMut, seq: u32, tp: u32) -> Result<JsonValue, io::Error> {
 		let mut json = JsonValue::new_object();
 
 		json[MSG_TYPE_U32] = tp.into();
+		json[SEQ_ID] = seq.into();
 		json[MSG_ID] = buf.get_u64().into();//msg_id 8
 		json[RESULT] = buf.get_u32().into();//result 4
 
@@ -773,6 +767,8 @@ pub trait ProtocolImpl: Send + Sync {
 
 		let is_report = buf.get_u8(); //Registered_Delivery	1
 		if is_report == 0 {
+			//是状态报告.修改一下返回的类型.
+			json[MSG_TYPE_U32] = self.get_type_id(MsgType::Report).into();
 			//长短信的处理 tp_udhi != 0 说明是长短信
 			json[MSG_FMT] = msg_fmt.into(); //Msg_Fmt 1
 			let msg_content_len = buf.get_u8(); //Msg_Length	1
@@ -836,9 +832,12 @@ pub trait ProtocolImpl: Send + Sync {
 		let mut json = JsonValue::new_object();
 		json[MSG_TYPE_U32] = tp.into();
 		json[SEQ_ID] = seq.into();
-		json[USER_ID] = load_utf8_string(buf, 6).into();
-		json[AUTHENTICATOR] = copy_to_bytes(buf, 16).as_ref().into();
+		json[LOGIN_NAME] = load_utf8_string(buf, 6).into();
+		//现在取2次,相当于只保存8位.
+		json[AUTHENTICATOR] = buf.get_u64().into();
+		json[AUTHENTICATOR] = buf.get_u64().into();
 		json[VERSION] = (buf.get_u8() as u32).into();
+		json[TIMESTAMP] = buf.get_u32().into();
 
 		Ok(json)
 	}

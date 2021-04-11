@@ -6,11 +6,11 @@ use async_trait::async_trait;
 use json::JsonValue;
 use tokio::sync::mpsc::{self};
 
-use crate::entity::{ Entity, start_entity};
+use crate::entity::{Entity, start_entity};
 use crate::entity::channel::Channel;
 use crate::get_runtime;
 use crate::protocol::{SmsStatus, Protocol};
-use crate::global::{TEMP_SAVE,get_sequence_id};
+use crate::global::{TEMP_SAVE, get_sequence_id};
 
 #[derive(Debug)]
 pub struct ServerEntity {
@@ -155,7 +155,7 @@ impl Entity for ServerEntity {
 
 		let index = get_sequence_id(1);
 		let mut save = TEMP_SAVE.write().await;
-		save.insert(index,(entity_to_channel_priority_tx,entity_to_channel_common_tx));
+		save.insert(index, (entity_to_channel_priority_tx, entity_to_channel_common_tx));
 
 
 		let msg = json::object! {
@@ -173,6 +173,14 @@ impl Entity for ServerEntity {
 
 	fn get_id(&self) -> u32 {
 		self.id
+	}
+
+	fn get_login_name(&self) -> &str {
+		self.login_name.as_str()
+	}
+
+	fn get_password(&self) -> &str{
+		self.password.as_str()
 	}
 
 	///对请求端来说。所有都允许

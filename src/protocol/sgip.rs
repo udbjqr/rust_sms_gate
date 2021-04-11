@@ -707,7 +707,7 @@ impl ProtocolImpl for Sgip {
 		json[SEQ_ID] = buf.get_u64().into();
 		buf.advance(1); //Login Type
 		json[LOGIN_NAME] = copy_to_bytes(buf, 16).as_ref().into();//Login Name
-		json[LOGIN_NAME] = copy_to_bytes(buf, 16).as_ref().into(); //Login Passowrd
+		json[PASSWORD] = copy_to_bytes(buf, 16).as_ref().into(); //Login Passowrd
 
 		Ok(json)
 	}

@@ -9,7 +9,7 @@ use tokio_util::codec::Framed;
 
 use crate::entity::EntityManager;
 use crate::protocol::{MsgType, SmsStatus::{self, MessageError, Success}, Protocol};
-use crate::protocol::names::{STATUS, USER_ID, WAIT_RECEIPT, ADDRESS, MSG_TYPE_STR};
+use crate::protocol::names::{STATUS, ENTITY_ID, WAIT_RECEIPT, ADDRESS, MSG_TYPE_STR, VERSION, LOGIN_NAME};
 use std::time::{Instant};
 use crate::entity::attach_custom::check_custom_login;
 use std::net::{IpAddr, SocketAddr};
@@ -71,13 +71,14 @@ impl Channel {
 			return Err(e);
 		};
 
+		*framed.codec_mut() = self.protocol.clone();
 		self.start_work(&mut framed).await;
 
 		Ok(())
 	}
 
 	///连接服务器的动作
-	async fn connect(&mut self, framed: &mut Framed<TcpStream, Protocol>, id: u32, mut login_msg: JsonValue, ip_addr: IpAddr) -> Result<(), io::Error> {
+	async fn connect(&mut self, framed: &mut Framed<TcpStream, Protocol>, entity_id: u32, mut login_msg: JsonValue, ip_addr: IpAddr) -> Result<(), io::Error> {
 		match self.protocol.encode_message(&mut login_msg) {
 			Ok(msg) => framed.send(msg).await?,
 			Err(e) => {
@@ -88,15 +89,18 @@ impl Channel {
 
 		match framed.next().await {
 			Some(Ok(mut resp)) => {
-				resp[USER_ID] = id.into();
+				resp[ENTITY_ID] = entity_id.into();
 				log::info!("收到登录返回信息:{}", resp);
 
 				//判断返回类型和返回状态。
 				match (resp[MSG_TYPE_STR].as_str().unwrap_or("").into(),
 				       self.protocol.get_status_enum(resp[STATUS].as_u32().unwrap())) {
 					(MsgType::ConnectResp, SmsStatus::Success) => {
-						if let (Success, _) = self.handle_login(resp, false, ip_addr).await {
-							info!("登录成功。");
+						if let (Success, resp) = self.handle_login(resp, false, ip_addr).await {
+							if let Some(version) = resp[VERSION].as_u32() {
+								self.protocol = self.protocol.match_version(version);
+								log::info!("登录成功 ..更换版本.现在版本:{:?}", self.protocol);
+							}
 						} else {
 							error!("登录后初始化异常。");
 						}
@@ -180,7 +184,7 @@ impl Channel {
 			if idle_count > 30 {
 				if let Ok(send_msg) = self.protocol.encode_message(&mut active_test) {
 					if let Err(e) = framed.send(send_msg).await {
-						error!("发送回执出现错误, e:{}", e);
+						error!("发送心跳回执出现错误, e:{}", e);
 					}
 				} else {
 					log::info!("没有得到编码完成的数据.不发送心跳.")
@@ -195,8 +199,9 @@ impl Channel {
 					idle_count = 0;
 				  match msg {
 				    Some(Ok(mut json)) => {
+							log::info!("通道收到消息:{}",&json);
               if curr_rx <= self.rx_limit {
-								//当收到的不是回执才回返回Some.
+								//收到消息,生成回执...当收到的不是回执才回返回Some.
 								if let Some(resp) = self.protocol.encode_receipt(SmsStatus::Success,&mut json) {
 									if let Err(e) = channel_to_entity_tx.send(json).await {
 										log::error!("向实体发送消息出现异常, e:{}", e);
@@ -299,7 +304,7 @@ impl Channel {
 	async fn tell_entity_disconnect(&mut self) {
 		//发送连接断开消息。
 		let dis = json::object! {
-			msg_type_str:"close",
+			msg_type:"close",
 			id:self.id,
 		};
 
@@ -319,17 +324,18 @@ impl Channel {
 						match status {
 							Success => {
 								info!("登录成功。{}", result);
-								if let Ok(msg) = self.protocol.encode_message(&mut result) {
+								*framed.codec_mut() = self.protocol.clone();
+								if let Some(msg) = self.protocol.encode_receipt(Success,&mut result) {
 									framed.send(msg).await?;
 								}
+								self.need_approve = false;
 
 								Ok(())
 							}
-							//这里只处理登录请求。第一个收到的消息不是登录。直接退出。
 							_ => {
 								let name: &str = status.into();
 								result[STATUS] = name.into();
-								if let Ok(msg) = self.protocol.encode_message(&mut result) {
+								if let Some(msg) = self.protocol.encode_receipt(status, &mut result) {
 									framed.send(msg).await?;
 								}
 
@@ -337,6 +343,7 @@ impl Channel {
 							}
 						}
 					}
+					//这里只处理登录请求。第一个收到的消息不是登录。直接退出。
 					_ => {
 						log::error!("当前只处理登录消息.msg:{}", request);
 						Err(io::Error::new(io::ErrorKind::ConnectionAborted, "当前需要登录请求。"))
@@ -359,26 +366,38 @@ impl Channel {
 
 	///is_server 指明当前操作是否是做为服务端。是服务端将增加检验操作。
 	async fn handle_login(&mut self, login_info: JsonValue, is_server: bool, ip_addr: IpAddr) -> (SmsStatus, JsonValue) {
-		let id = match login_info[USER_ID].as_u32() {
-			None => {
-				error!("数据结构内没有user_id的值。无法继续");
-				return (MessageError, login_info);
-			}
-			Some(id) => id
-		};
-
 		let manage = EntityManager::get_entity_manager();
 		let entitys = manage.entitys.read().await;
-		let entity = match entitys.get(&id) {
-			None => {
-				error!("user_id找不到对应的entity.");
+
+		let entity = if is_server {
+			if let Some((_, en)) = entitys.iter().find(|(_, en)| {
+				en.get_login_name() == login_info[LOGIN_NAME].as_str().unwrap_or("")
+			}) {
+				en
+			} else {
+				log::error!("没有找到对应的login_name.退出.msg:{}", login_info);
 				return (SmsStatus::AuthError, login_info);
 			}
-			Some(en) => en
+		} else {
+			match login_info[ENTITY_ID].as_u32() {
+				None => {
+					error!("数据结构内没有entity_id的值。无法继续..info:{}", login_info);
+					return (MessageError, login_info);
+				}
+				Some(id) => {
+					match entitys.get(&id) {
+						None => {
+							error!("user_id找不到对应的entity.");
+							return (SmsStatus::AuthError, login_info);
+						}
+						Some(en) => en
+					}
+				}
+			}
 		};
 
 		if is_server {
-			if let Some(result_err) = check_custom_login(&login_info, entity, &self.protocol, ip_addr) {
+			if let Some(result_err) = check_custom_login(&login_info, entity, &mut self.protocol, ip_addr) {
 				return result_err;
 			}
 		}

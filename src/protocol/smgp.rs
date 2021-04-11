@@ -1,10 +1,10 @@
 use tokio_util::codec::{LengthDelimitedCodec, Decoder};
-use crate::protocol::implements::{ProtocolImpl, get_time, fill_bytes_zero, load_utf8_string, copy_to_bytes, decode_msg_content};
+use crate::protocol::implements::{ProtocolImpl, get_time, fill_bytes_zero, load_utf8_string,  decode_msg_content};
 use bytes::{BytesMut, BufMut, Buf};
 use tokio::io;
 use crate::protocol::{SmsStatus, MsgType};
 use json::JsonValue;
-use crate::protocol::names::{LOGIN_NAME, PASSWORD, VERSION, MSG_TYPE_U32, SEQ_ID, USER_ID, AUTHENTICATOR, MSG_CONTENT, SERVICE_ID, VALID_TIME, AT_TIME, SRC_ID, DEST_IDS, SEQ_IDS, MSG_FMT, MSG_ID, RESULT, SP_ID, DEST_ID, RECEIVE_TIME, SUBMIT_TIME, DONE_TIME, STATE, ERROR_CODE, RESP_NODE_ID, TEXT};
+use crate::protocol::names::{LOGIN_NAME, PASSWORD, VERSION, MSG_TYPE_U32, SEQ_ID, AUTHENTICATOR, MSG_CONTENT, SERVICE_ID, VALID_TIME, AT_TIME, SRC_ID, DEST_IDS, SEQ_IDS, MSG_FMT, MSG_ID, RESULT, SP_ID, DEST_ID, RECEIVE_TIME, SUBMIT_TIME, DONE_TIME, STATE, ERROR_CODE, RESP_NODE_ID, TEXT,  TIMESTAMP};
 use crate::protocol::msg_type::MsgType::{Connect, SubmitResp};
 use std::io::Error;
 use encoding::all::UTF_16BE;
@@ -421,18 +421,12 @@ impl ProtocolImpl for Smgp {
 
 		let valid_time = match json[VALID_TIME].as_str() {
 			Some(v) => v,
-			None => {
-				log::error!("没有valid_time.退出..json:{}", json);
-				return Err(io::Error::new(io::ErrorKind::NotFound, "没有valid_time"));
-			}
+			None => "",
 		};
 
 		let at_time = match json[AT_TIME].as_str() {
 			Some(v) => v,
-			None => {
-				log::error!("没有at_time.退出..json:{}", json);
-				return Err(io::Error::new(io::ErrorKind::NotFound, "没有at_time"));
-			}
+			None => "",
 		};
 
 		let src_id = match json[SRC_ID].as_str() {
@@ -531,10 +525,11 @@ impl ProtocolImpl for Smgp {
 		Ok(dst)
 	}
 
-	fn decode_submit_or_deliver_resp(&self, buf: &mut BytesMut, _seq: u32, tp: u32) -> Result<JsonValue, io::Error> {
+	fn decode_submit_or_deliver_resp(&self, buf: &mut BytesMut, seq: u32, tp: u32) -> Result<JsonValue, io::Error> {
 		let mut json = JsonValue::new_object();
 
 		json[MSG_TYPE_U32] = tp.into();
+		json[SEQ_ID] = seq.into();
 
 		let mut msg_id_buf = buf.split_to(10);
 		let (ismg_id, msg_id) = self.decode_msg_id(&mut msg_id_buf);
@@ -574,6 +569,8 @@ impl ProtocolImpl for Smgp {
 		};
 
 		if is_report == 0 {
+			//是状态报告.修改一下返回的类型.
+			json[MSG_TYPE_U32] = self.get_type_id(MsgType::Report).into();
 			json[MSG_FMT] = msg_fmt.into(); //Msg_Fmt 1
 			decode_msg_content(&mut content_buf, msg_fmt, msg_content_len, &mut json, is_long_sms)?;
 		} else {
@@ -637,10 +634,15 @@ impl ProtocolImpl for Smgp {
 		json[MSG_TYPE_U32] = tp.into();
 		json[SEQ_ID] = seq.into();
 
-		json[USER_ID] = load_utf8_string(buf, 8).into();
-		json[AUTHENTICATOR] = copy_to_bytes(buf, 16).as_ref().into();
-		buf.advance(5); //AuthenticatorClient 1 LoginMode 4
+		json[LOGIN_NAME] = load_utf8_string(buf, 8).into();
+		// json[AUTHENTICATOR] = copy_to_bytes(buf, 16).as_ref().into();
+		//现在取2次,相当于只保存8位.
+		json[AUTHENTICATOR] = buf.get_u64().into();
+		json[AUTHENTICATOR] = buf.get_u64().into();
+		buf.advance(1); // LoginMode *
+		json[TIMESTAMP] = buf.get_u32().into();
 		json[VERSION] = (buf.get_u8() as u32).into();
+
 
 		Ok(json)
 	}

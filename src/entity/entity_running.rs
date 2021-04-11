@@ -100,17 +100,21 @@ async fn handle_from_channel_rx(msg: Option<JsonValue>, context: &mut EntityRunC
 						(MsgType::Deliver, Some(true)) |
 						(MsgType::Submit, Some(true)) |
 						(MsgType::Report, Some(true)) => {
+							log::trace!("缓存一个消息.等待回执..消息:{}", msg);
 							insert_into_wait_receipt(&mut context.wait_receipt_map, msg);
 						}
 						(MsgType::ReportResp, _) => {
+							log::trace!("收到回执..移除缓存:{}", &get_key(&msg));
 							context.wait_receipt_map.remove(&get_key(&msg));
 							send_to_queue(&context.to_queue, TOPIC_TO_B_REPORT_RESP, "", msg).await;
 						}
 						(MsgType::DeliverResp, _) => {
+							log::trace!("收到回执..移除缓存:{}", &get_key(&msg));
 							context.wait_receipt_map.remove(&get_key(&msg));
 							send_to_queue(&context.to_queue, TOPIC_TO_B_DELIVER_RESP, "", msg).await;
 						}
 						(MsgType::SubmitResp, _) => {
+							log::trace!("收到回执..移除缓存:{}", &get_key(&msg));
 							context.wait_receipt_map.remove(&get_key(&msg));
 							send_to_queue(&context.to_queue, TOPIC_TO_B_SUBMIT_RESP, "", msg).await;
 						}
@@ -279,11 +283,8 @@ fn handle_long_sms(context: &mut EntityRunContext, msg: JsonValue, total: u8) ->
 }
 
 async fn send_to_queue(to_queue: &Arc<KafkaMessageProducer>, topic: &str, key: &str, json: JsonValue) {
-	if let Some(v) = json.as_str() {
-		to_queue.send(topic, key, v).await;
-	} else {
-		log::error!("发送至消息队列出现异常。topic:{},key:{}.消息：{}", topic, key, json);
-	}
+	log::trace!("收到消息..发送至消息队列.topic:{},key:{},msg:{}", topic, key, json);
+	to_queue.send(topic, key, json.to_string().as_str()).await;
 }
 
 
@@ -335,7 +336,7 @@ async fn send_to_channels(msg: JsonValue, context: &mut EntityRunContext) {
 
 	while !context.send_channels.is_empty() {
 		let mut failure = None;
-		if context.index == usize::max_value() {
+		if context.index == usize::MAX {
 			context.index = 1;
 		}
 		context.index += 1;
