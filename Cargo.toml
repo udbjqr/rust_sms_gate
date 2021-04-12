@@ -21,11 +21,7 @@ md5 = "*"
 chrono = "0.4.19"
 lazy_static = "*"
 async-trait = "*"
-
-[[bin]]
-name="sms_test"
-path= "src/test_main.rs"
-
+log4rs =  { version = "1.0.0", features = ["background_rotation","gzip"] }
 
 [[bin]]
 name="sms_gate"

@@ -23,7 +23,7 @@ pub trait ProtocolImpl: Send + Sync {
 		match self.get_framed(buf) {
 			//这里直接用
 			Ok(Some(mut buf)) => {
-				log::trace!("打印一下收到的消息. src:{:X}", buf);
+				log::trace!("收到的消息. src:{:X}", buf);
 				//拿command
 				let tp = buf.get_u32();
 				//拿掉seq.对sgip来说.这里只是拿了node_id.还有2个没拿

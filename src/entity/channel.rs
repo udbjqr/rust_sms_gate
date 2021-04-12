@@ -13,7 +13,6 @@ use crate::protocol::names::{STATUS, ENTITY_ID, WAIT_RECEIPT, ADDRESS, MSG_TYPE_
 use std::time::{Instant};
 use crate::entity::attach_custom::check_custom_login;
 use std::net::{IpAddr, SocketAddr};
-use crate::get_runtime;
 use crate::global::{message_sender, TOPIC_TO_B_FAILURE};
 
 #[derive(Debug)]
@@ -233,6 +232,7 @@ impl Channel {
 							error!("解码出现错误,跳过当前消息。{}", e);
 						}
 						None => {
+							self.clear().await;
 							info!("当前连接已经断开。。。。");
 							//连接断开的处理。
 							self.tell_entity_disconnect().await;
@@ -252,7 +252,7 @@ impl Channel {
 								} else {
 									// 计数加1
 									curr_tx = curr_tx + 1;
-									//把收到的消息发送给实体
+									//把要等待回复的消息再发送回实体
 									send[WAIT_RECEIPT] = true.into();
 									if let Err(e) = channel_to_entity_tx.send(send).await {
 										log::error!("向实体发送消息出现异常, e:{}", e);
@@ -263,6 +263,7 @@ impl Channel {
 						}
 						None => {
 							warn!("实体向通道(优先)已经被关闭。直接退出。");
+							self.clear().await;
 							return;
 						}
 					}
@@ -279,7 +280,7 @@ impl Channel {
 								} else {
 									// 成功计数加1
 									curr_tx = curr_tx + 1;
-									//把收到的消息发送给实体
+									//把要等待回复的消息再发送回实体
 									send[WAIT_RECEIPT] = true.into();
 									if let Err(e) = channel_to_entity_tx.send(send).await {
 										log::error!("向实体发送消息出现异常, e:{}", e);
@@ -290,6 +291,7 @@ impl Channel {
 						}
 						None => {
 							warn!("实体向通道(普通)已经被关闭。直接退出。");
+							self.clear().await;
 							return;
 						}
 					}
@@ -419,22 +421,21 @@ impl Channel {
 			(status, login_info)
 		}
 	}
-}
 
-impl Drop for Channel {
-	fn drop(&mut self) {
+	async fn clear(&mut self) {
 		log::debug!("通道关闭过程.{}", self.id);
-		let entity_to_channel_priority_rx = self.entity_to_channel_priority_rx.as_mut().unwrap();
-		let entity_to_channel_common_rx = self.entity_to_channel_common_rx.as_mut().unwrap();
 
-		get_runtime().block_on(async move {
-			let sender = message_sender();
+		let sender = message_sender();
+		if let Some(entity_to_channel_priority_rx) = self.entity_to_channel_priority_rx.as_mut() {
 			while let Some(msg) = entity_to_channel_priority_rx.recv().await {
 				sender.send(TOPIC_TO_B_FAILURE, "", msg.to_string().as_str()).await;
 			}
+		}
+
+		if let Some(entity_to_channel_common_rx) = self.entity_to_channel_common_rx.as_mut() {
 			while let Some(msg) = entity_to_channel_common_rx.recv().await {
 				sender.send(TOPIC_TO_B_FAILURE, "", msg.to_string().as_str()).await;
 			}
-		});
+		}
 	}
 }

@@ -3,7 +3,7 @@ use sms_gate::get_runtime;
 
 fn main() {
 	//设置日志启动
-	simple_logger::SimpleLogger::new().init().unwrap();
+	log4rs::init_file("config/log.yaml", Default::default()).unwrap();
 
 	//使用enter 加载运行时。必须需要let _guard 要不没有生命周期。
 	let runtime = get_runtime();

@@ -1,0 +1,104 @@
+# Scan this file for changes every 30 seconds
+refresh_rate: 30 seconds
+
+appenders:
+  all:
+    kind: rolling_file
+    policy:
+      kind: compound # 默认值, 即使用所有 policy
+      trigger: # 当文件超过10mb 时触发 rotate
+        kind: size
+        limit: 100mb
+      roller: # rotate 类型
+        kind: fixed_window
+        pattern: "c_log-{}.gzip" # 注意, 需要至少包含 "{}" 用于插入索引值
+        base: 0 # 压缩日志索引值起点
+        count: 200 # 最大保存压缩文件数
+    path: "log/all.log"
+    encoder:
+      pattern: "{d(%X%.6f)} [{l}] thread:{T} {f}:{L} - {m}{n}"
+
+  entity:
+    kind: rolling_file
+    policy:
+      kind: compound # 默认值, 即使用所有 policy
+      trigger: # 当文件超过10mb 时触发 rotate
+        kind: size
+        limit: 100mb
+      roller: # rotate 类型
+        kind: fixed_window
+        pattern: "entity_log-{}.gzip" # 注意, 需要至少包含 "{}" 用于插入索引值
+        base: 0 # 压缩日志索引值起点
+        count: 200 # 最大保存压缩文件数
+    path: "log/entity.log"
+    encoder:
+      pattern: "{d(%H:%M:%S)} - {m}{n}"
+
+  channel:
+    kind: rolling_file
+    policy:
+      kind: compound # 默认值, 即使用所有 policy
+      trigger: # 当文件超过10mb 时触发 rotate
+        kind: size
+        limit: 100mb
+      roller: # rotate 类型
+        kind: fixed_window
+        pattern: "channel_log-{}.gzip" # 注意, 需要至少包含 "{}" 用于插入索引值
+        base: 0 # 压缩日志索引值起点
+        count: 200 # 最大保存压缩文件数
+    path: "log/channel.log"
+    encoder:
+      pattern: "{d(%H:%M:%S)} - {m}{n}"
+
+  protocol:
+    kind: rolling_file
+    policy:
+      kind: compound # 默认值, 即使用所有 policy
+      trigger: # 当文件超过10mb 时触发 rotate
+        kind: size
+        limit: 100mb
+      roller: # rotate 类型
+        kind: fixed_window
+        pattern: "protocol_log-{}.gzip" # 注意, 需要至少包含 "{}" 用于插入索引值
+        base: 0 # 压缩日志索引值起点
+        count: 200 # 最大保存压缩文件数
+    path: "log/protocol.log"
+    encoder:
+      pattern: "{d(%H:%M:%S)} - {m}{n}"
+
+
+loggers:
+  sms_gate::entity::channel:
+    level: trace
+    appenders:
+      - channel
+    additive: false
+
+  sms_gate::entity:
+    level: trace
+    appenders:
+      - entity
+    additive: false
+
+  sms_gate::protocol:
+    level: trace
+    appenders:
+      - protocol
+    additive: false
+
+  sms_gate::message_queue:
+    level: trace
+    appenders:
+      - entity
+    additive: false
+
+  sms_gate::global:
+    level: trace
+    appenders:
+      - all
+    additive: false
+
+root:
+  level: info
+  appenders:
+    - all

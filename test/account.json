@@ -1,13 +1,1 @@
-{
-	"id": 99,
-	"allow_addrs": "192.168.88.210,127.0.0.1",
-	"login_name": "999999",
-	"password": "123456",
-	"sp_id": "909090",
-	"read_limit": 20,
-	"write_limit": 20,
-	"name": "第一个",
-	"version": "32",
-	"protocol": "cmpp",
-	"max_channel_number": 2
-}
+{	"id": 99,	"allow_addrs": "192.168.88.210,127.0.0.1,192.168.101.99",	"login_name": "999999",	"password": "123456",	"sp_id": "909090",	"read_limit": 20,	"write_limit": 20,	"name": "第99个",	"version": "32",	"protocol": "cmpp",	"max_channel_number": 2}
