@@ -10,7 +10,7 @@ use tokio::runtime::{Builder, Runtime};
 use tokio::sync::RwLock;
 
 use crate::message_queue::KafkaMessageProducer;
-use tokio::sync::mpsc::Sender;
+use tokio::sync::mpsc;
 
 pub static TOPIC_ACCOUNT_MODIFY: &'static str = "account.modify";
 pub static TOPIC_ACCOUNT_ADD: &'static str = "account.add";
@@ -26,6 +26,12 @@ pub static TOPIC_TO_B_REPORT: &'static str = "toB.report";
 pub static TOPIC_TO_B_REPORT_RESP: &'static str = "toB.report.response";
 pub static TOPIC_TO_B_FAILURE: &'static str = "sms.send.return.failure";
 
+
+
+/// 请求通道状态改变
+pub static TOPIC_PASSAGE_REQUEST_STATE: &'static str = "passage.request.state";
+/// 通道状态改变消息
+pub static TOPIC_TO_B_PASSAGE_STATE_CHANGE: &'static str = "passage.state.change";
 pub static TOPIC_FROM_B_SUBMIT: &'static str = "send.submit";
 pub static TOPIC_FROM_B_DELIVER: &'static str = "send.deliver";
 pub static TOPIC_FROM_B_REPORT: &'static str = "send.report";
@@ -36,7 +42,7 @@ lazy_static! {
 	static ref SEQUENCE: AtomicU32 = AtomicU32::new(rand::random());
 	pub static ref FILL_ZERO: Vec<u8> = vec![0;200];
 	pub static ref ISMG_ID: u32 = rand::random::<u32>() % 1000000;
-		pub static ref TEMP_SAVE:RwLock<HashMap<u32,(Sender<JsonValue>,Sender<JsonValue>)>> = RwLock::new(HashMap::new());
+		pub static ref TEMP_SAVE:RwLock<HashMap<u32,(mpsc::Sender<JsonValue>,mpsc::Sender<JsonValue>)>> = RwLock::new(HashMap::new());
 	// static ref SERVERS_CONFIG: RwLock<JsonValue> = RwLock::new(load_config_file("smsServer.json"));
 }
 

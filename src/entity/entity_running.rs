@@ -3,7 +3,7 @@ use json::JsonValue;
 use std::sync::Arc;
 use crate::entity::{ChannelStates};
 use std::collections::HashMap;
-use crate::protocol::names::{MANAGER_TYPE, MSG_TYPE_STR, ID, WAIT_RECEIPT, SEQ_ID, LONG_SMS_TOTAL, SRC_ID, DEST_ID, DEST_IDS, LONG_SMS_NOW_NUMBER, MSG_ID, MSG_CONTENT, MSG_IDS, RECEIVE_TIME, ENTITY_ID, SEQ_IDS, IS_PRIORITY, SP_ID, SERVICE_ID};
+use crate::protocol::names::{MANAGER_TYPE, MSG_TYPE_STR, ID, WAIT_RECEIPT, SEQ_ID, LONG_SMS_TOTAL, SRC_ID, DEST_ID, DEST_IDS, LONG_SMS_NOW_NUMBER, MSG_ID, MSG_CONTENT, MSG_IDS, RECEIVE_TIME, ENTITY_ID, SEQ_IDS, IS_PRIORITY, SP_ID, SERVICE_ID, STATE};
 use crate::protocol::MsgType;
 use crate::global::{TEMP_SAVE, message_sender, TOPIC_TO_B_SUBMIT, TOPIC_TO_B_DELIVER, TOPIC_TO_B_DELIVER_RESP, TOPIC_TO_B_SUBMIT_RESP, TOPIC_TO_B_REPORT_RESP, TOPIC_TO_B_REPORT, TOPIC_TO_B_FAILURE};
 use crate::message_queue::KafkaMessageProducer;
@@ -21,9 +21,11 @@ struct EntityRunContext {
 	long_sms_cache: HashMap<String, Vec<Option<JsonValue>>>,
 	to_queue: Arc<KafkaMessageProducer>,
 	now_conn_num: Arc<AtomicU8>,
+	state_change_json: JsonValue,
 }
 
-pub async fn start_entity(mut manager_to_entity_rx: mpsc::Receiver<JsonValue>, mut from_channel: mpsc::Receiver<JsonValue>, entity_id: u32, service_id: String, sp_id: String,
+pub async fn start_entity(mut manager_to_entity_rx: mpsc::
+Receiver<JsonValue>, mut from_channel: mpsc::Receiver<JsonValue>, entity_id: u32, service_id: String, sp_id: String,
                           now_conn_num: Arc<AtomicU8>) {
 	let mut context = EntityRunContext {
 		entity_id,
@@ -35,6 +37,11 @@ pub async fn start_entity(mut manager_to_entity_rx: mpsc::Receiver<JsonValue>, m
 		long_sms_cache: HashMap::new(),
 		to_queue: message_sender().clone(),
 		now_conn_num,
+		state_change_json: json::object! {
+						msg_type: "PassageStateChange",
+						id: entity_id,
+						state: 0
+					},
 	};
 
 	let mut timestamp = chrono::Local::now().timestamp();
@@ -159,7 +166,14 @@ async fn handle_from_channel_rx(msg: Option<JsonValue>, context: &mut EntityRunC
 							//保留除当前通道外其余通道
 							context.send_channels.retain(|item| item.id != id);
 							context.now_conn_num.swap(context.send_channels.len() as u8, SeqCst);
+
+							//已经没有连接了.向外发连接断开消息
+							if context.send_channels.len() == 0 {
+								context.state_change_json[STATE] = 0.into();
+								context.to_queue.send(TOPIC_TO_B_FAILURE, "", context.state_change_json.to_string().as_str()).await;
+							}
 						}
+						//有通道连接上了
 						(MsgType::Connect, _) => {
 							if let Some(ind) = msg["channel_id"].as_u32() {
 								let mut save = TEMP_SAVE.write().await;
@@ -171,6 +185,13 @@ async fn handle_from_channel_rx(msg: Option<JsonValue>, context: &mut EntityRunC
 										entity_to_channel_priority_tx,
 										entity_to_channel_common_tx,
 									});
+
+									//如果原连接数是0.转成现在有的话.向外发送已经连接消息
+									if context.now_conn_num.load(SeqCst) == 0 {
+										context.state_change_json[STATE] = 1.into();
+										context.to_queue.send(TOPIC_TO_B_FAILURE, "", context.state_change_json.to_string().as_str()).await;
+									}
+
 									context.now_conn_num.swap(context.send_channels.len() as u8, SeqCst);
 								} else {
 									log::error!("收到通道创建消息.但没有在临时存放里面找到它.msg:{}", msg);
@@ -283,7 +304,6 @@ fn handle_long_sms(context: &mut EntityRunContext, msg: JsonValue, total: u8) ->
 }
 
 async fn send_to_queue(to_queue: &Arc<KafkaMessageProducer>, topic: &str, key: &str, json: JsonValue) {
-	log::trace!("收到消息..发送至消息队列.topic:{},key:{},msg:{}", topic, key, json);
 	to_queue.send(topic, key, json.to_string().as_str()).await;
 }
 
@@ -297,6 +317,14 @@ async fn handle_from_manager_rx(msg: Option<JsonValue>, context: &mut EntityRunC
 		}
 		Some(msg) => {
 			match msg[MANAGER_TYPE].as_str() {
+				Some("send") => {
+					send_to_channels(msg, context).await
+				}
+				Some("passage.request.state") => {
+					log::trace!("收到需要状态的消息。");
+
+					context.to_queue.send(TOPIC_TO_B_FAILURE, "", context.state_change_json.to_string().as_str()).await;
+				}
 				Some("close") => {
 					log::debug!("开始进行实体的关闭操作。");
 
@@ -307,10 +335,10 @@ async fn handle_from_manager_rx(msg: Option<JsonValue>, context: &mut EntityRunC
 							log::error!("当前通道的发送队列为空...entity:{}", context.entity_id);
 						}
 					}
+
+					context.state_change_json[STATE] = 0.into();
+					context.to_queue.send(TOPIC_TO_B_FAILURE, "", context.state_change_json.to_string().as_str()).await;
 					return false;
-				}
-				Some("send") => {
-					send_to_channels(msg, context).await
 				}
 				None => {
 					log::error!("接收消息出现异常。消息没有相关类型。msg:{}", msg);
@@ -329,6 +357,7 @@ async fn send_to_channels(msg: JsonValue, context: &mut EntityRunContext) {
 	//有可以选择发送的通道
 	let mut send_msg = msg;
 
+	send_msg[ENTITY_ID] = context.entity_id.into();
 	send_msg[SP_ID] = context.sp_id.as_str().into();
 	if !context.service_id.is_empty() {
 		send_msg[SERVICE_ID] = context.service_id.as_str().into();
@@ -350,8 +379,12 @@ async fn send_to_channels(msg: JsonValue, context: &mut EntityRunContext) {
 						se
 					} else {
 						log::error!("选择不到可以发送消息的通道..id:{}", context.entity_id);
-						//一个通道都没有的时候.返回错误
+
+						//一个通道都没有的时候.返回错误.同时发连接断开消息
 						context.to_queue.send(TOPIC_TO_B_FAILURE, "", &send_msg.to_string()).await;
+						context.state_change_json[STATE] = 0.into();
+						context.to_queue.send(TOPIC_TO_B_FAILURE, "", context.state_change_json.to_string().as_str()).await;
+
 						return;
 					}
 				}

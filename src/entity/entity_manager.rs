@@ -12,7 +12,7 @@ use tokio::sync::{mpsc, RwLock};
 use crate::entity::{CustomEntity, Entity};
 use crate::entity::attach_server::ServerEntity;
 use crate::get_runtime;
-use crate::global::{load_config_file, TOPIC_FROM_B_SUBMIT, TOPIC_FROM_B_DELIVER, TOPIC_FROM_B_REPORT};
+use crate::global::{load_config_file, TOPIC_FROM_B_SUBMIT, TOPIC_FROM_B_DELIVER, TOPIC_FROM_B_REPORT, TOPIC_PASSAGE_REQUEST_STATE};
 use crate::protocol::names::{MANAGER_TYPE, VERSION, SERVICE_ID, SP_ID, LOGIN_NAME, PASSWORD, ADDRESS, NAME, READ_LIMIT, WRITE_LIMIT, PROTOCOL, MAX_CHANNEL_NUMBER, ALLOW_ADDRS};
 
 ///实体的管理对象。
@@ -61,6 +61,7 @@ impl EntityManager {
 			"passage.modify",
 			"passage.add",
 			"passage.remove",
+			TOPIC_PASSAGE_REQUEST_STATE,
 			TOPIC_FROM_B_SUBMIT,
 			TOPIC_FROM_B_DELIVER,
 			TOPIC_FROM_B_REPORT,
@@ -297,6 +298,15 @@ async fn handle_queue_msg(topic: &str, mut json: JsonValue, context: &mut RunCon
 			}
 
 			info!("收到{}消息。但现在不删除,只进行关闭操作。", topic);
+		}
+		//请求状态改变消息
+		"passage.request.state" => {
+			for (_,item) in context.senders.iter(){
+				json[MANAGER_TYPE] = topic.into();
+				if let Err(e) = item.send(json.clone()).await {
+					log::error!("发送至entity出现异常.e:{}", e);
+				}
+			}
 		}
 		_ => {
 			error!("接收到一个我也不知道的主题。退出。topic:{}", topic);

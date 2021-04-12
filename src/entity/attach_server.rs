@@ -75,8 +75,8 @@ impl ServerEntity {
 	pub async fn start(&mut self) -> mpsc::Sender<JsonValue> {
 		log::debug!("开始进行实体的启动操作。启动消息接收。id:{}", self.id);
 
-		let (manage_to_entity_tx, manage_to_entity_rx) = mpsc::channel(0xFFFFFFFF);
-		let (channel_to_entity_tx, channel_to_entity_rx) = mpsc::channel(0xFFFFFFFF);
+		let (manage_to_entity_tx, manage_to_entity_rx) = mpsc::channel(0xff);
+		let (channel_to_entity_tx, channel_to_entity_rx) = mpsc::channel(self.read_limit as usize);
 
 		log::info!("通道{},,开始启动处理消息.", self.name);
 		//这里开始自己的消息处理
@@ -149,8 +149,8 @@ impl Entity for ServerEntity {
 		}
 
 		//通过后进行附加上去的动作。
-		let (entity_to_channel_priority_tx, entity_to_channel_priority_rx) = mpsc::channel::<JsonValue>(5);
-		let (entity_to_channel_common_tx, entity_to_channel_common_rx) = mpsc::channel::<JsonValue>(5);
+		let (entity_to_channel_priority_tx, entity_to_channel_priority_rx) = mpsc::channel(0xffffffff);
+		let (entity_to_channel_common_tx, entity_to_channel_common_rx) = mpsc::channel(0xffffffff);
 		let channel_to_entity_tx = self.channel_to_entity_tx.as_ref().unwrap().clone();
 
 		let index = get_sequence_id(1);

@@ -13,6 +13,8 @@ use crate::protocol::names::{STATUS, ENTITY_ID, WAIT_RECEIPT, ADDRESS, MSG_TYPE_
 use std::time::{Instant};
 use crate::entity::attach_custom::check_custom_login;
 use std::net::{IpAddr, SocketAddr};
+use crate::get_runtime;
+use crate::global::{message_sender, TOPIC_TO_B_FAILURE};
 
 #[derive(Debug)]
 pub struct Channel {
@@ -325,7 +327,7 @@ impl Channel {
 							Success => {
 								info!("登录成功。{}", result);
 								*framed.codec_mut() = self.protocol.clone();
-								if let Some(msg) = self.protocol.encode_receipt(Success,&mut result) {
+								if let Some(msg) = self.protocol.encode_receipt(Success, &mut result) {
 									framed.send(msg).await?;
 								}
 								self.need_approve = false;
@@ -416,5 +418,23 @@ impl Channel {
 		} else {
 			(status, login_info)
 		}
+	}
+}
+
+impl Drop for Channel {
+	fn drop(&mut self) {
+		log::debug!("通道关闭过程.{}", self.id);
+		let entity_to_channel_priority_rx = self.entity_to_channel_priority_rx.as_mut().unwrap();
+		let entity_to_channel_common_rx = self.entity_to_channel_common_rx.as_mut().unwrap();
+
+		get_runtime().block_on(async move {
+			let sender = message_sender();
+			while let Some(msg) = entity_to_channel_priority_rx.recv().await {
+				sender.send(TOPIC_TO_B_FAILURE, "", msg.to_string().as_str()).await;
+			}
+			while let Some(msg) = entity_to_channel_common_rx.recv().await {
+				sender.send(TOPIC_TO_B_FAILURE, "", msg.to_string().as_str()).await;
+			}
+		});
 	}
 }
