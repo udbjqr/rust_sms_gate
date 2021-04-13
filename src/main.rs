@@ -1,5 +1,6 @@
 use sms_gate::entity::{EntityManager, ServersManager};
 use sms_gate::get_runtime;
+use sms_gate::global::{message_sender, TOPIC_TO_B_LOWER_COMPUTER_INIT};
 
 fn main() {
 	//设置日志启动
@@ -16,6 +17,10 @@ fn main() {
 		log::error!("启动服务等待接收异常。退出。e:{}", e);
 		return;
 	}
+
+	get_runtime().spawn(async move {
+		message_sender().send(TOPIC_TO_B_LOWER_COMPUTER_INIT, "", "{}").await;
+	});
 
 	std::thread::park();
 }

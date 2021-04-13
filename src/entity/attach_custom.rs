@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use json::JsonValue;
 use tokio::sync::{mpsc};
 
-use crate::entity::{Entity, start_entity};
+use crate::entity::{Entity, start_entity, EntityType};
 use crate::get_runtime;
 use crate::protocol::{SmsStatus, Protocol};
 use crate::protocol::names::{VERSION, AUTHENTICATOR, TIMESTAMP};
@@ -76,7 +76,7 @@ impl CustomEntity {
 
 		log::info!("通道{},,开始启动处理消息.", self.name);
 		//这里开始自己的消息处理
-		get_runtime().spawn(start_entity(manage_to_entity_rx, channel_to_entity_rx, self.id, self.service_id.clone(), self.sp_id.clone(), self.now_channel_number.clone()));
+		get_runtime().spawn(start_entity(manage_to_entity_rx, channel_to_entity_rx, self.id, self.service_id.clone(), self.sp_id.clone(), self.now_channel_number.clone(), EntityType::Custom));
 
 		self.channel_to_entity_tx = Some(channel_to_entity_tx);
 
@@ -157,7 +157,7 @@ pub fn check_custom_login(json: &JsonValue, entity: &Box<(dyn Entity + 'static)>
 	let my_auth = protocol.get_auth(entity.get_login_name(), entity.get_password(), json[TIMESTAMP].as_u32().unwrap_or(0));
 
 	let (_, my_auth) = my_auth.split_at(8);
-	let auth = u64::from_be_bytes(unsafe { *(my_auth as *const _  as *const [u8;8]) });
+	let auth = u64::from_be_bytes(unsafe { *(my_auth as *const _ as *const [u8; 8]) });
 
 	if auth != json[AUTHENTICATOR].as_u64().unwrap_or(0) {
 		return Some((SmsStatus::AuthError, json.clone()));

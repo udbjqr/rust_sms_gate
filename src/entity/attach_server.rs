@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use json::JsonValue;
 use tokio::sync::mpsc::{self};
 
-use crate::entity::{Entity, start_entity};
+use crate::entity::{Entity, start_entity, EntityType};
 use crate::entity::channel::Channel;
 use crate::get_runtime;
 use crate::protocol::{SmsStatus, Protocol};
@@ -80,7 +80,7 @@ impl ServerEntity {
 
 		log::info!("通道{},,开始启动处理消息.", self.name);
 		//这里开始自己的消息处理
-		get_runtime().spawn(start_entity(manage_to_entity_rx, channel_to_entity_rx, self.id, self.service_id.clone(), self.sp_id.clone(), self.now_channel_number.clone()));
+		get_runtime().spawn(start_entity(manage_to_entity_rx, channel_to_entity_rx, self.id, self.service_id.clone(), self.sp_id.clone(), self.now_channel_number.clone(), EntityType::Server));
 
 		self.channel_to_entity_tx = Some(channel_to_entity_tx);
 
@@ -103,10 +103,10 @@ impl ServerEntity {
 
 		get_runtime().spawn(async move {
 			let login_msg = json::object! {
-				login_name: user_name,
+				loginName: user_name,
 				password: password,
-				address: addr,
-				version: version,
+				gatewayIp: addr,
+				protocolVersion: version,
 				msg_type: "Connect"
 			};
 
@@ -117,23 +117,26 @@ impl ServerEntity {
 					return;
 				}
 
-				let conn_num = max_num - now_num.load(Relaxed) as usize;
-				if conn_num > 0 {
-					for _item in 0..conn_num {
-						let protocol = protocol.clone();
-						let login_msg = login_msg.clone();
-						get_runtime().spawn(async move {
-							let mut channel = Channel::new(protocol, false);
+				let now_num = now_num.load(Relaxed) as usize;
+				if max_num > now_num {
+					let conn_num = max_num - now_num;
+					if conn_num > 0 {
+						for _item in 0..conn_num {
+							let protocol = protocol.clone();
+							let login_msg = login_msg.clone();
+							get_runtime().spawn(async move {
+								let mut channel = Channel::new(protocol, false);
 
-							//启动连接准备
-							if let Err(e) = channel.start_connect(id, login_msg).await {
-								log::error!("连接服务端出现异常。。e:{}", e);
-							}
-						});
-					};
-
-					tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
+								//启动连接准备
+								if let Err(e) = channel.start_connect(id, login_msg).await {
+									log::error!("连接服务端出现异常。。e:{}", e);
+								}
+							});
+						};
+					}
 				}
+
+				tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
 			}
 		});
 	}
@@ -179,7 +182,7 @@ impl Entity for ServerEntity {
 		self.login_name.as_str()
 	}
 
-	fn get_password(&self) -> &str{
+	fn get_password(&self) -> &str {
 		self.password.as_str()
 	}
 

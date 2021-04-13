@@ -428,13 +428,13 @@ impl Channel {
 		let sender = message_sender();
 		if let Some(entity_to_channel_priority_rx) = self.entity_to_channel_priority_rx.as_mut() {
 			while let Some(msg) = entity_to_channel_priority_rx.recv().await {
-				sender.send(TOPIC_TO_B_FAILURE, "", msg.to_string().as_str()).await;
+				sender.send(TOPIC_TO_B_FAILURE, "2", msg.to_string().as_str()).await;
 			}
 		}
 
 		if let Some(entity_to_channel_common_rx) = self.entity_to_channel_common_rx.as_mut() {
 			while let Some(msg) = entity_to_channel_common_rx.recv().await {
-				sender.send(TOPIC_TO_B_FAILURE, "", msg.to_string().as_str()).await;
+				sender.send(TOPIC_TO_B_FAILURE, "2", msg.to_string().as_str()).await;
 			}
 		}
 	}

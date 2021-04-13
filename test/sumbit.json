@@ -1,10 +1,47 @@
+//{
+//	"id": 23,
+//	"msg_type": "Submit",
+//	"msg_content": "这是一条消息.",
+//	"src_id": "106822031234567",
+//	"dest_ids": [
+//		"18179156296"
+//	],
+//	"is_priority": true
+//}
 {
-	"id": 23,
-	"msg_type": "Submit",
-	"msg_content": "这是一条消息.",
-	"src_id": "106822031234567",
-	"dest_ids": [
-		"18179156296"
+	"flag": "NEW_ADD",
+	"signature": "",
+	"msgFmt": 8,
+	"msgId": "0312163322001790058499",
+	"contentBytes": [
+		89,
+		125,
+		91,
+		-74,
+		79,
+		25,
+		-1,
+		1
 	],
-	"is_priority": true
+	"spSrcId": "s",
+	"sequenceNo": 1383146156,
+	"srcId": "10682203",
+	"tppid": 0,
+	"id": 291,
+	"flowId": 326,
+	"terminated": true,
+	"tpudhi": 0,
+	"errorCodeId": 0,
+	"provinceId": 360000,
+	"atTime": "1618216403317",
+	"currentTime": 1618314947057,
+	"accountId": 20,
+	"msgContent": "好家伙！",
+	"destId": "18179156296",
+	"size": 2,
+	"response": false,
+	"success": false,
+	"msg_type": "SubmitRequest",
+	"passageId": 87,
+	"validTime": "32874873497"
 }

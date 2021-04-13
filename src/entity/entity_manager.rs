@@ -61,6 +61,8 @@ impl EntityManager {
 			"passage.modify",
 			"passage.add",
 			"passage.remove",
+			"passage.init",
+			"account.init",
 			TOPIC_PASSAGE_REQUEST_STATE,
 			TOPIC_FROM_B_SUBMIT,
 			TOPIC_FROM_B_DELIVER,
@@ -77,7 +79,7 @@ impl EntityManager {
 			.set("auto.offset.reset", "earliest")
 			// Commit automatically every 5 seconds.
 			.set("enable.auto.commit", "true")
-			.set("auto.commit.interval.ms", "5000")
+			.set("auto.commit.interval.ms", "2000")
 			// .set("enable.auto.offset.store", "false")
 			.create() {
 			Ok(v) => v,
@@ -204,8 +206,7 @@ async fn handle_from_entity_msg(manager_type: &str, msg: &JsonValue, context: &m
 async fn handle_queue_msg(topic: &str, mut json: JsonValue, context: &mut RunContext) {
 	let id = match json["id"].as_u32() {
 		None => {
-			error!("接收的消息未指定id。直接放弃。msg:{}", json);
-			return;
+			0
 		}
 		Some(v) => v
 	};
@@ -222,7 +223,7 @@ async fn handle_queue_msg(topic: &str, mut json: JsonValue, context: &mut RunCon
 				log::error!("未找到指定id的实体发送者,跳过。msg:{}", json);
 			}
 		}
-		"account.modify" | "passage.add" | "account.add" | "passage.modify" => {
+		"passage.add" | "account.add" | "passage.modify" | "passage.init" | "account.init" | "account.modify" => {
 			let mut entitys = entity_manager.entitys.write().await;
 			if let Some(_) = entitys.get(&id) {
 				if let Some(sender) = context.senders.remove(&id) {
@@ -246,8 +247,8 @@ async fn handle_queue_msg(topic: &str, mut json: JsonValue, context: &mut RunCon
 					json[LOGIN_NAME].as_str().unwrap_or("").to_string(),
 					json[PASSWORD].as_str().unwrap_or("").to_string(),
 					json[ALLOW_ADDRS].as_str().unwrap_or("").to_string(),
-					json[READ_LIMIT].as_u32().unwrap_or(0xffffffff),
-					json[WRITE_LIMIT].as_u32().unwrap_or(0xffffffff),
+					json[READ_LIMIT].as_u32().unwrap_or(200),
+					json[WRITE_LIMIT].as_u32().unwrap_or(200),
 					json[MAX_CHANNEL_NUMBER].as_usize().unwrap_or(0xff),
 					json,
 					context.entity_to_manager_tx.clone(),
@@ -301,7 +302,7 @@ async fn handle_queue_msg(topic: &str, mut json: JsonValue, context: &mut RunCon
 		}
 		//请求状态改变消息
 		"passage.request.state" => {
-			for (_,item) in context.senders.iter(){
+			for (_, item) in context.senders.iter() {
 				json[MANAGER_TYPE] = topic.into();
 				if let Err(e) = item.send(json.clone()).await {
 					log::error!("发送至entity出现异常.e:{}", e);

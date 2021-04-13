@@ -14,7 +14,8 @@ mod entity;
 #[test]
 fn test_json() {
 
-	let (tx,rx) = mpsc::channel(0xFFFFFFFF);
+	let d = 0 as usize;
+	let b = 21 as usize;
 
 // tx.
 	// let semaphore = (semaphore::Semaphore::new(buffer), buffer);

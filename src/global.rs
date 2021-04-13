@@ -14,9 +14,11 @@ use tokio::sync::mpsc;
 
 pub static TOPIC_ACCOUNT_MODIFY: &'static str = "account.modify";
 pub static TOPIC_ACCOUNT_ADD: &'static str = "account.add";
+pub static TOPIC_ACCOUNT_INIT: &'static str = "account.init";
 pub static TOPIC_ACCOUNT_REMOVE: &'static str = "account.remove";
 pub static TOPIC_PASSAGE_MODIFY: &'static str = "passage.modify";
 pub static TOPIC_PASSAGE_ADD: &'static str = "passage.add";
+pub static TOPIC_PASSAGE_INIT: &'static str = "passage.init";
 pub static TOPIC_PASSAGE_REMOVE: &'static str = "passage.remove";
 pub static TOPIC_TO_B_SUBMIT: &'static str = "toB.submit";
 pub static TOPIC_TO_B_SUBMIT_RESP: &'static str = "toB.submit.response";
@@ -32,6 +34,8 @@ pub static TOPIC_TO_B_FAILURE: &'static str = "sms.send.return.failure";
 pub static TOPIC_PASSAGE_REQUEST_STATE: &'static str = "passage.request.state";
 /// 通道状态改变消息
 pub static TOPIC_TO_B_PASSAGE_STATE_CHANGE: &'static str = "passage.state.change";
+pub static TOPIC_TO_B_ACCOUNT_STATE_CHANGE: &'static str = "account.state.change";
+pub static TOPIC_TO_B_LOWER_COMPUTER_INIT: &'static str = "lower.computer.init";
 pub static TOPIC_FROM_B_SUBMIT: &'static str = "send.submit";
 pub static TOPIC_FROM_B_DELIVER: &'static str = "send.deliver";
 pub static TOPIC_FROM_B_REPORT: &'static str = "send.report";

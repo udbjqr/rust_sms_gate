@@ -11,7 +11,7 @@ appenders:
         limit: 100mb
       roller: # rotate 类型
         kind: fixed_window
-        pattern: "c_log-{}.gzip" # 注意, 需要至少包含 "{}" 用于插入索引值
+        pattern: "log/all_log-{}.gzip" # 注意, 需要至少包含 "{}" 用于插入索引值
         base: 0 # 压缩日志索引值起点
         count: 200 # 最大保存压缩文件数
     path: "log/all.log"
@@ -27,12 +27,12 @@ appenders:
         limit: 100mb
       roller: # rotate 类型
         kind: fixed_window
-        pattern: "entity_log-{}.gzip" # 注意, 需要至少包含 "{}" 用于插入索引值
+        pattern: "log/entity_log-{}.gzip" # 注意, 需要至少包含 "{}" 用于插入索引值
         base: 0 # 压缩日志索引值起点
         count: 200 # 最大保存压缩文件数
     path: "log/entity.log"
     encoder:
-      pattern: "{d(%H:%M:%S)} - {m}{n}"
+      pattern: "{d(%X%.6f)} [{l}] thread:{T} {f}:{L} - {m}{n}"
 
   channel:
     kind: rolling_file
@@ -43,12 +43,12 @@ appenders:
         limit: 100mb
       roller: # rotate 类型
         kind: fixed_window
-        pattern: "channel_log-{}.gzip" # 注意, 需要至少包含 "{}" 用于插入索引值
+        pattern: "log/channel_log-{}.gzip" # 注意, 需要至少包含 "{}" 用于插入索引值
         base: 0 # 压缩日志索引值起点
         count: 200 # 最大保存压缩文件数
     path: "log/channel.log"
     encoder:
-      pattern: "{d(%H:%M:%S)} - {m}{n}"
+      pattern: "{d(%X%.6f)} [{l}] thread:{T} {f}:{L} - {m}{n}"
 
   protocol:
     kind: rolling_file
@@ -59,12 +59,12 @@ appenders:
         limit: 100mb
       roller: # rotate 类型
         kind: fixed_window
-        pattern: "protocol_log-{}.gzip" # 注意, 需要至少包含 "{}" 用于插入索引值
+        pattern: "log/protocol_log-{}.gzip" # 注意, 需要至少包含 "{}" 用于插入索引值
         base: 0 # 压缩日志索引值起点
         count: 200 # 最大保存压缩文件数
     path: "log/protocol.log"
     encoder:
-      pattern: "{d(%H:%M:%S)} - {m}{n}"
+      pattern: "{d(%X%.6f)} [{l}] thread:{T} {f}:{L} - {m}{n}"
 
 
 loggers:

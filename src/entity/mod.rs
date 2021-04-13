@@ -56,3 +56,8 @@ pub struct ChannelStates {
 // 		}
 // 	}
 // }
+
+pub enum EntityType{
+	Custom,
+	Server
+}
