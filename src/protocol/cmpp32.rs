@@ -1,5 +1,5 @@
 use tokio_util::codec::{LengthDelimitedCodec, Decoder};
-use crate::protocol::implements::{ProtocolImpl, create_cmpp_msg_id, fill_bytes_zero, load_utf8_string, decode_msg_content};
+use crate::protocol::implements::{ProtocolImpl, create_cmpp_msg_id, fill_bytes_zero, load_utf8_string, decode_msg_content, cmpp_msg_id_u64_to_str, cmpp_msg_id_str_to_u64};
 use json::JsonValue;
 use bytes::{BytesMut, BufMut, Buf};
 use crate::protocol::names::{AUTHENTICATOR, SEQ_ID, VERSION, MSG_ID, SERVICE_ID, STATE, SUBMIT_TIME, DONE_TIME, SMSC_SEQUENCE, SRC_ID, DEST_ID, SEQ_IDS, MSG_CONTENT, SP_ID, VALID_TIME, AT_TIME, DEST_IDS, MSG_TYPE_U32, RESULT,  MSG_FMT, IS_REPORT};
@@ -50,18 +50,27 @@ impl ProtocolImpl for Cmpp32 {
 			}
 		};
 
-		let submit_status = self.get_status_id(&status);
+		let dest_ids = if json[DEST_IDS].is_array() {
+			let mut dest_ids = Vec::with_capacity(json[DEST_IDS].len());
+			json[DEST_IDS].members().for_each(|item| dest_ids.push(item.as_str().unwrap()));
 
-		let msg_id: u64 = create_cmpp_msg_id();
-		json[MSG_ID] = msg_id.into();
+			dest_ids
+		} else {
+			log::error!("没有dest_ids.退出..json:{}", json);
+			return None;
+		};
+
+		let submit_status = self.get_status_id(&status);
+		let msg_id: u64 = create_cmpp_msg_id(dest_ids.len() as u32);
 
 		let mut buf = BytesMut::with_capacity(21);
-
 		buf.put_u32(21);
 		buf.put_u32(self.get_type_id(SubmitResp));
 		buf.put_u32(seq_id);
 		buf.put_u64(msg_id);
 		buf.put_u8(submit_status as u8);
+
+		json[MSG_ID] = cmpp_msg_id_u64_to_str(msg_id).into();
 
 		Some(buf)
 	}
@@ -75,12 +84,12 @@ impl ProtocolImpl for Cmpp32 {
 			}
 		};
 
-		let msg_id = match json[MSG_ID].as_u64() {
+		let msg_id = match json[MSG_ID].as_str() {
 			None => {
 				log::error!("没有msg_id字串.退出..json:{}", json);
 				return None;
 			}
-			Some(v) => v
+			Some(v) => cmpp_msg_id_str_to_u64(v)
 		};
 
 		let status = self.get_status_id(&status);
@@ -96,15 +105,14 @@ impl ProtocolImpl for Cmpp32 {
 		Some(buf)
 	}
 
-
 	fn encode_report(&self, json: &mut JsonValue) -> Result<BytesMut, Error> {
 		//只检测一下.如果没有后续不处理.
-		let msg_id = match json[MSG_ID].as_u64() {
+		let msg_id = match json[MSG_ID].as_str() {
 			None => {
 				log::error!("没有msg_id字串.退出..json:{}", json);
 				return Err(io::Error::new(io::ErrorKind::NotFound, "没有msg_id字串"));
 			}
-			Some(v) => v
+			Some(v) => cmpp_msg_id_str_to_u64(v)
 		};
 		let service_id = match json[SERVICE_ID].as_str() {
 			Some(v) => v,
@@ -170,7 +178,7 @@ impl ProtocolImpl for Cmpp32 {
 		seq_ids.push(seq_id);
 		dst.put_u32(seq_id);
 
-		dst.put_u64(create_cmpp_msg_id()); //Msg_Id 8
+		dst.put_u64(create_cmpp_msg_id(1)); //Msg_Id 8
 		fill_bytes_zero(&mut dst, dest_id, 21);//dest_id 21
 		fill_bytes_zero(&mut dst, service_id, 10);//service_id 10
 		dst.put_u8(0); //TP_pid 1
@@ -193,12 +201,12 @@ impl ProtocolImpl for Cmpp32 {
 
 	fn encode_deliver(&self, json: &mut JsonValue) -> Result<BytesMut, Error> {
 		//只检测一下.如果没有后续不处理.
-		let _msg_id = match json[MSG_ID].as_u64() {
+		let msg_id = match json[MSG_ID].as_str() {
 			None => {
 				log::error!("没有msg_id字串.退出..json:{}", json);
 				return Err(io::Error::new(io::ErrorKind::NotFound, "没有msg_id字串"));
 			}
-			Some(v) => v
+			Some(v) => cmpp_msg_id_str_to_u64(v)
 		};
 
 		let msg_content = match json[MSG_CONTENT].as_str() {
@@ -278,7 +286,7 @@ impl ProtocolImpl for Cmpp32 {
 			seq_ids.push(seq_id);
 			dst.put_u32(seq_id);
 
-			dst.put_u64(create_cmpp_msg_id()); //Msg_Id 8
+			dst.put_u64(msg_id); //Msg_Id 8
 			fill_bytes_zero(&mut dst, dest_id, 21);//dest_id 21
 			fill_bytes_zero(&mut dst, service_id, 10);//service_id 10
 			dst.put_u8(0); //TP_pid 1
@@ -443,7 +451,7 @@ impl ProtocolImpl for Cmpp32 {
 
 		json[MSG_TYPE_U32] = tp.into();
 		json[SEQ_ID] = seq.into();
-		json[MSG_ID] = buf.get_u64().into();//msg_id 8
+		json[MSG_ID] = cmpp_msg_id_u64_to_str(buf.get_u64()).into();//msg_id 8
 		json[RESULT] = (buf.get_u8() as u32).into();//result 1
 
 		Ok(json)
@@ -455,7 +463,7 @@ impl ProtocolImpl for Cmpp32 {
 		json[MSG_TYPE_U32] = tp.into();
 		json[SEQ_ID] = seq.into();
 
-		json[MSG_ID] = buf.get_u64().into(); //msg_id 8
+		json[MSG_ID] = cmpp_msg_id_u64_to_str(buf.get_u64()).into(); //msg_id 8
 		json[DEST_ID] = load_utf8_string(buf, 21).into(); //dest_id 21
 		json[SERVICE_ID] = load_utf8_string(buf, 10).into(); //service_id 10
 		buf.advance(1); //TP_pid 1
@@ -464,8 +472,6 @@ impl ProtocolImpl for Cmpp32 {
 		json[SRC_ID] = load_utf8_string(buf, 21).into(); //src_id 21
 		let is_report = buf.get_u8(); //Registered_Delivery	1
 		if is_report == 0 {
-			//是状态报告.修改一下返回的类型.
-			json[MSG_TYPE_U32] = self.get_type_id(MsgType::Report).into();
 			//长短信的处理 tp_udhi != 0 说明是长短信
 			json[MSG_FMT] = msg_fmt.into(); //Msg_Fmt 1
 			let msg_content_len = buf.get_u8(); //Msg_Length	1
@@ -473,11 +479,14 @@ impl ProtocolImpl for Cmpp32 {
 		} else {
 			buf.advance(1); //Msg_Length 1
 			json[IS_REPORT] = true.into(); //状态报告增加.
-			json[MSG_ID] = buf.get_u64().into(); // Msg_Id
+			json[MSG_ID] = cmpp_msg_id_u64_to_str(buf.get_u64()).into(); // Msg_Id
 			json[STATE] = load_utf8_string(buf, 7).into(); // Stat
 			json[SUBMIT_TIME] = load_utf8_string(buf, 10).into(); // Submit_time
 			json[DONE_TIME] = load_utf8_string(buf, 10).into(); // Done_time
 			json[SRC_ID] = load_utf8_string(buf, 21).into(); // dest_terminal_id
+
+			//是状态报告.修改一下返回的类型.
+			json[MSG_TYPE_U32] = self.get_type_id(MsgType::Report).into();
 		}
 
 		Ok(json)
@@ -488,7 +497,7 @@ impl ProtocolImpl for Cmpp32 {
 		json[MSG_TYPE_U32] = tp.into();
 		json[SEQ_ID] = seq.into();
 
-		json[MSG_ID] = buf.get_u64().into(); //msg_id 8
+		json[MSG_ID] = cmpp_msg_id_u64_to_str(buf.get_u64()).into(); //msg_id 8
 		buf.advance(4); //Pk_total 1 Pk_number 1 Registered_Delivery 1 Msg_level 1
 		json[SERVICE_ID] = load_utf8_string(buf, 10).into(); //service_id 10
 		buf.advance(23); //Fee_UserType 1  Fee_terminal_Id 21 TP_pId	1

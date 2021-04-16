@@ -13,6 +13,7 @@ use tokio::io::Error;
 use crate::protocol::msg_type::SmsStatus;
 use crate::protocol::names::{SEQ_ID, AUTHENTICATOR, VERSION, STATUS, MSG_TYPE_U32, MSG_CONTENT, MSG_ID, SERVICE_ID, TP_UDHI, SP_ID, VALID_TIME, AT_TIME, SRC_ID, MSG_FMT, DEST_IDS, RESULT, DEST_ID, STATE, SUBMIT_TIME, DONE_TIME, SMSC_SEQUENCE, IS_REPORT, MSG_TYPE_STR, LONG_SMS_TOTAL, LONG_SMS_NOW_NUMBER, SEQ_IDS, LOGIN_NAME, PASSWORD, TIMESTAMP};
 use crate::protocol::MsgType;
+use std::ops::Add;
 
 pub trait ProtocolImpl: Send + Sync {
 	fn get_framed(&mut self, buf: &mut BytesMut) -> io::Result<Option<BytesMut>>;
@@ -29,12 +30,19 @@ pub trait ProtocolImpl: Send + Sync {
 				//拿掉seq.对sgip来说.这里只是拿了node_id.还有2个没拿
 				let seq = buf.get_u32();
 
-				let msg_type = self.get_type_enum(tp);
+				let mut msg_type = self.get_type_enum(tp);
 				let mut msg = match msg_type {
 					MsgType::Submit => self.decode_submit(&mut buf, seq, tp)?,
 					MsgType::DeliverResp => self.decode_submit_or_deliver_resp(&mut buf, seq, tp)?,
 					MsgType::SubmitResp => self.decode_submit_or_deliver_resp(&mut buf, seq, tp)?,
-					MsgType::Deliver => self.decode_deliver(&mut buf, seq, tp)?,
+					MsgType::Deliver => {
+						let json = self.decode_deliver(&mut buf, seq, tp)?;
+						if let Some(true) = json[IS_REPORT].as_bool() {
+							msg_type = MsgType::Report;
+						}
+
+						json
+					}
 					MsgType::ActiveTest | MsgType::ActiveTestResp => self.decode_nobody(&mut buf, seq, tp)?,
 					MsgType::Connect => self.decode_connect(&mut buf, seq, tp)?,
 					MsgType::ConnectResp => self.decode_connect_resp(&mut buf, seq, tp)?,
@@ -87,8 +95,8 @@ pub trait ProtocolImpl: Send + Sync {
 			MsgType::SubmitResp => 0x80000004,
 			MsgType::Deliver => 0x00000005,
 			MsgType::DeliverResp => 0x80000005,
-			MsgType::Report => 0x00000005,
-			MsgType::ReportResp => 0x80000005,
+			MsgType::Report => 0x01000005,
+			MsgType::ReportResp => 0x81000005,
 			MsgType::Connect => 0x00000001,
 			MsgType::ConnectResp => 0x80000001,
 			MsgType::Terminate => 0x00000002,
@@ -279,25 +287,58 @@ pub trait ProtocolImpl: Send + Sync {
 			}
 		};
 
-		let submit_status = self.get_status_id(&status);
+		let dest_ids = if json[DEST_IDS].is_array() {
+			let mut dest_ids = Vec::with_capacity(json[DEST_IDS].len());
+			json[DEST_IDS].members().for_each(|item| dest_ids.push(item.as_str().unwrap()));
 
-		let msg_id: u64 = create_cmpp_msg_id();
-		json[MSG_ID] = msg_id.into();
+			dest_ids
+		} else {
+			log::error!("没有dest_ids.退出..json:{}", json);
+			return None;
+		};
+
+		let submit_status = self.get_status_id(&status);
+		let msg_id: u64 = create_cmpp_msg_id(dest_ids.len() as u32);
 
 		let mut buf = BytesMut::with_capacity(24);
-
 		buf.put_u32(24);
 		buf.put_u32(self.get_type_id(SubmitResp));
 		buf.put_u32(seq_id);
 		buf.put_u64(msg_id);
 		buf.put_u32(submit_status);
 
+		json[MSG_ID] = cmpp_msg_id_u64_to_str(msg_id).into();
 		Some(buf)
 	}
 
-	fn encode_report_resp(&self, _status: SmsStatus, _json: &mut JsonValue) -> Option<BytesMut> {
-		//大部分协议直接使用deliver做为report.只有联通使用report协议
-		None
+	fn encode_report_resp(&self, status: SmsStatus, json: &mut JsonValue) -> Option<BytesMut> {
+		let seq_id = match json[SEQ_ID].as_u32() {
+			Some(v) => v,
+			None => {
+				log::error!("没有seq_id.退出..json:{}", json);
+				return None;
+			}
+		};
+
+		let msg_id = match json[MSG_ID].as_str() {
+			None => {
+				log::error!("没有msg_id字串.退出..json:{}", json);
+				return None;
+			}
+			Some(v) => cmpp_msg_id_str_to_u64(v)
+		};
+
+		let status = self.get_status_id(&status);
+
+		let mut buf = BytesMut::with_capacity(24);
+
+		buf.put_u32(24);
+		buf.put_u32(self.get_type_id(MsgType::DeliverResp));
+		buf.put_u32(seq_id);
+		buf.put_u64(msg_id);
+		buf.put_u32(status);
+
+		Some(buf)
 	}
 
 	fn encode_deliver_resp(&self, status: SmsStatus, json: &mut JsonValue) -> Option<BytesMut> {
@@ -309,12 +350,12 @@ pub trait ProtocolImpl: Send + Sync {
 			}
 		};
 
-		let msg_id = match json[MSG_ID].as_u64() {
+		let msg_id = match json[MSG_ID].as_str() {
 			None => {
 				log::error!("没有msg_id字串.退出..json:{}", json);
 				return None;
 			}
-			Some(v) => v
+			Some(v) => cmpp_msg_id_str_to_u64(v)
 		};
 
 		let status = self.get_status_id(&status);
@@ -360,13 +401,25 @@ pub trait ProtocolImpl: Send + Sync {
 		Ok(dst)
 	}
 
+	fn encode_terminate(&self, json: &mut JsonValue) -> Result<BytesMut, Error> {
+		let mut dst = BytesMut::with_capacity(12);
+
+		dst.put_u32(12);
+		dst.put_u32(self.get_type_id(MsgType::Terminate));
+		let seq_id = get_sequence_id(1);
+		dst.put_u32(seq_id);
+
+		json[SEQ_ID] = seq_id.into();
+		Ok(dst)
+	}
+
 	fn encode_report(&self, json: &mut JsonValue) -> Result<BytesMut, Error> {
-		let msg_id = match json[MSG_ID].as_u64() {
+		let msg_id = match json[MSG_ID].as_str() {
 			None => {
 				log::error!("没有msg_id字串.退出..json:{}", json);
 				return Err(io::Error::new(io::ErrorKind::NotFound, "没有msg_id字串"));
 			}
-			Some(v) => v
+			Some(v) => cmpp_msg_id_str_to_u64(v)
 		};
 
 		let service_id = match json[SERVICE_ID].as_str() {
@@ -432,7 +485,7 @@ pub trait ProtocolImpl: Send + Sync {
 		seq_ids.push(seq_id);
 		dst.put_u32(seq_id);
 
-		dst.put_u64(create_cmpp_msg_id()); //Msg_Id 8
+		dst.put_u64(create_cmpp_msg_id(1)); //Msg_Id 8
 		fill_bytes_zero(&mut dst, dest_id, 21);//dest_id 21
 		fill_bytes_zero(&mut dst, service_id, 10);//service_id 10
 		dst.put_u8(0); //TP_pid 1
@@ -456,13 +509,12 @@ pub trait ProtocolImpl: Send + Sync {
 	}
 
 	fn encode_deliver(&self, json: &mut JsonValue) -> Result<BytesMut, Error> {
-		//只检测一下.如果没有后续不处理.
-		let _msg_id = match json[MSG_ID].as_u64() {
+		let msg_id = match json[MSG_ID].as_str() {
 			None => {
 				log::error!("没有msg_id字串.退出..json:{}", json);
 				return Err(io::Error::new(io::ErrorKind::NotFound, "没有msg_id字串"));
 			}
-			Some(v) => v
+			Some(v) => cmpp_msg_id_str_to_u64(v)
 		};
 
 		let msg_content = match json[MSG_CONTENT].as_str() {
@@ -542,7 +594,7 @@ pub trait ProtocolImpl: Send + Sync {
 			seq_ids.push(seq_id);
 			dst.put_u32(seq_id);
 
-			dst.put_u64(create_cmpp_msg_id()); //Msg_Id 8
+			dst.put_u64(msg_id); //Msg_Id 8
 			fill_bytes_zero(&mut dst, dest_id, 21);//dest_id 21
 			fill_bytes_zero(&mut dst, service_id, 10);//service_id 10
 			dst.put_u8(0); //TP_pid 1
@@ -605,7 +657,6 @@ pub trait ProtocolImpl: Send + Sync {
 		let valid_time = match json[VALID_TIME].as_str() {
 			Some(v) => v,
 			None => ""
-
 		};
 
 		let at_time = match json[AT_TIME].as_str() {
@@ -631,6 +682,12 @@ pub trait ProtocolImpl: Send + Sync {
 			return Err(io::Error::new(io::ErrorKind::NotFound, "没有dest_ids"));
 		};
 
+		let seq_id = match json[SEQ_ID].as_u64() {
+			None => {
+				get_sequence_id(dest_ids.len() as u32)
+			}
+			Some(v) => v as u32
+		};
 
 		let msg_content_len = msg_content_code.len();
 
@@ -664,7 +721,6 @@ pub trait ProtocolImpl: Send + Sync {
 
 			dst.put_u32((163 + dest_ids.len() * 32 + msg_content_head_len + this_msg_content.len()) as u32);
 			dst.put_u32(self.get_type_id(MsgType::Submit));
-			let seq_id = get_sequence_id(dest_ids.len() as u32);
 			seq_ids.push(seq_id);
 			dst.put_u32(seq_id);
 
@@ -732,7 +788,7 @@ pub trait ProtocolImpl: Send + Sync {
 
 		json[MSG_TYPE_U32] = tp.into();
 		json[SEQ_ID] = seq.into();
-		json[MSG_ID] = buf.get_u64().into();//msg_id 8
+		json[MSG_ID] = cmpp_msg_id_u64_to_str(buf.get_u64()).into();//msg_id 8
 		json[RESULT] = buf.get_u32().into();//result 4
 
 		Ok(json)
@@ -756,7 +812,7 @@ pub trait ProtocolImpl: Send + Sync {
 		json[MSG_TYPE_U32] = tp.into();
 		json[SEQ_ID] = seq.into();
 
-		json[MSG_ID] = buf.get_u64().into(); //msg_id 8
+		json[MSG_ID] = cmpp_msg_id_u64_to_str(buf.get_u64()).into(); //msg_id 8
 		json[DEST_ID] = load_utf8_string(buf, 21).into(); //dest_id 21
 		json[SERVICE_ID] = load_utf8_string(buf, 10).into(); //service_id 10
 		buf.advance(1); //TP_pid 1
@@ -767,8 +823,6 @@ pub trait ProtocolImpl: Send + Sync {
 
 		let is_report = buf.get_u8(); //Registered_Delivery	1
 		if is_report == 0 {
-			//是状态报告.修改一下返回的类型.
-			json[MSG_TYPE_U32] = self.get_type_id(MsgType::Report).into();
 			//长短信的处理 tp_udhi != 0 说明是长短信
 			json[MSG_FMT] = msg_fmt.into(); //Msg_Fmt 1
 			let msg_content_len = buf.get_u8(); //Msg_Length	1
@@ -776,11 +830,14 @@ pub trait ProtocolImpl: Send + Sync {
 		} else {
 			buf.advance(1); //Msg_Length 1
 			json[IS_REPORT] = true.into(); //状态报告增加.
-			json[MSG_ID] = buf.get_u64().into(); // Msg_Id
+			json[MSG_ID] = cmpp_msg_id_u64_to_str(buf.get_u64()).into(); // Msg_Id
 			json[STATE] = load_utf8_string(buf, 7).into(); // Stat
 			json[SUBMIT_TIME] = load_utf8_string(buf, 10).into(); // Submit_time
 			json[DONE_TIME] = load_utf8_string(buf, 10).into(); // Done_time
 			json[SRC_ID] = load_utf8_string(buf, 32).into(); // dest_terminal_id
+
+			//是状态报告.修改一下返回的类型.
+			json[MSG_TYPE_U32] = self.get_type_id(MsgType::Report).into();
 		}
 
 		Ok(json)
@@ -796,7 +853,7 @@ pub trait ProtocolImpl: Send + Sync {
 		json[MSG_TYPE_U32] = tp.into();
 		json[SEQ_ID] = seq.into();
 
-		json[MSG_ID] = buf.get_u64().into(); //msg_id 8
+		json[MSG_ID] = cmpp_msg_id_u64_to_str(buf.get_u64()).into(); //msg_id 8
 		buf.advance(4); //Pk_total 1 Pk_number 1 Registered_Delivery 1 Msg_level 1
 		json[SERVICE_ID] = load_utf8_string(buf, 10).into(); //service_id 10
 		buf.advance(35); //Fee_UserType 1  Fee_terminal_Id 32 Fee_terminal_type	1 TP_pId	1
@@ -870,8 +927,111 @@ pub fn copy_to_bytes(buf: &mut BytesMut, len: usize) -> Bytes {
 	}
 }
 
+//TODO 这里需要进行些修改
+pub fn smgp_msg_id_str_to_u64(msg_id: &str) -> (u16,u64) {
+	(0,msg_id.parse().unwrap_or(0))
+}
+
+//TODO 这里需要进行些修改
+pub fn smgp_msg_id_u64_to_str(ismg_id: u16,  msg_id: u64) -> String {
+	ismg_id.to_string().add(msg_id.to_string().as_str())
+}
+
+pub fn cmpp_msg_id_u64_to_str(mut msg_id: u64) -> String {
+	let mut us = vec![0x30u8; 21];
+
+	let mut d = msg_id & 0xffff;
+	let mut ind = 20;
+	for _ in 0..5 {
+		us[ind] = 0x30 + (d % 10) as u8;
+		d = d / 10;
+		ind -= 1;
+	}
+	msg_id = msg_id >> 16;
+
+	d = msg_id & 0x3FFFFF;
+	for _ in 0..6 {
+		us[ind] = 0x30 + (d % 10) as u8;
+		d = d / 10;
+		ind -= 1;
+	}
+	msg_id = msg_id >> 22;
+
+	d = msg_id & 0x3F;
+	for _ in 0..2 {
+		us[ind] = 0x30 + (d % 10) as u8;
+		d = d / 10;
+		ind -= 1;
+	}
+	msg_id = msg_id >> 6;
+
+	d = msg_id & 0x3F;
+	for _ in 0..2 {
+		us[ind] = 0x30 + (d % 10) as u8;
+		d = d / 10;
+		ind -= 1;
+	}
+	msg_id = msg_id >> 6;
+
+	d = msg_id & 0x1F;
+	for _ in 0..2 {
+		us[ind] = 0x30 + (d % 10) as u8;
+		d = d / 10;
+		ind -= 1;
+	}
+	msg_id = msg_id >> 5;
+
+	d = msg_id & 0x1F;
+	for _ in 0..2 {
+		us[ind] = 0x30 + (d % 10) as u8;
+		d = d / 10;
+		ind -= 1;
+	}
+	msg_id = msg_id >> 5;
+
+	d = msg_id & 0x1F;
+	us[ind] = 0x30 + (d % 10) as u8;
+	d = d / 10;
+	ind -= 1;
+	us[ind] = 0x30 + (d % 10) as u8;
+
+	let res = unsafe {
+		String::from_utf8_unchecked(us)
+	};
+
+	res
+}
+
+pub fn cmpp_msg_id_str_to_u64(msg_id: &str) -> u64 {
+	// if !msg_id.as_bytes().is_ascii() {
+	//
+	// }
+	let (month, dd) = msg_id.split_at(2);
+	let month: u64 = month.parse().unwrap_or(0);
+	let (day, dd) = dd.split_at(2);
+	let day: u64 = day.parse().unwrap_or(0);
+	let (hour, dd) = dd.split_at(2);
+	let hour: u64 = hour.parse().unwrap_or(0);
+	let (minute, dd) = dd.split_at(2);
+	let minute: u64 = minute.parse().unwrap_or(0);
+	let (second, dd) = dd.split_at(2);
+	let second: u64 = second.parse().unwrap_or(0);
+	let (ismg_id, seq_id) = dd.split_at(6);
+	let ismg_id: u64 = ismg_id.parse().unwrap_or(0);
+	let seq_id: u64 = seq_id.parse().unwrap_or(0);
+
+	let mut result = month;
+	result = result << 5 | (day & 0x1F);
+	result = result << 5 | (hour & 0x1F) as u64;
+	result = result << 6 | (minute & 0x3F) as u64;
+	result = result << 6 | (second & 0x3F) as u64;
+	result = result << 22 | ismg_id as u64;
+
+	result << 16 | seq_id
+}
+
 ///返回一个msg_id.目前在Cmpp协议里面使用
-pub fn create_cmpp_msg_id() -> u64 {
+pub fn create_cmpp_msg_id(len: u32) -> u64 {
 	let date = Local::now();
 	let mut result: u64 = date.month() as u64;
 	result = result << 5 | (date.day() & 0x1F) as u64;
@@ -880,7 +1040,7 @@ pub fn create_cmpp_msg_id() -> u64 {
 	result = result << 6 | (date.second() & 0x3F) as u64;
 	result = result << 22 | *ISMG_ID as u64;
 
-	result << 16 | (get_sequence_id(1) & 0xff) as u64
+	result << 16 | (get_sequence_id(len) & 0xffff) as u64
 }
 
 ///处理短信内容的通用方法.msg_content..

@@ -6,7 +6,7 @@ use tokio::sync::{mpsc};
 
 use crate::protocol::{SmsStatus};
 
-pub use self::attach_custom::CustomEntity;
+pub use self::as_custom::CustomEntity;
 pub use self::entity_manager::EntityManager;
 pub use self::services::ServersManager;
 pub use self::entity_running::start_entity;
@@ -14,8 +14,8 @@ pub use self::entity_running::start_entity;
 
 #[macro_use]
 mod channel;
-mod attach_custom;
-mod attach_server;
+mod as_custom;
+mod as_server;
 mod services;
 mod entity_manager;
 mod entity_running;
@@ -29,11 +29,13 @@ pub trait Entity: Send + Sync + Debug {
 	fn get_login_name(&self) -> &str;
 	fn get_password(&self) -> &str;
 	fn get_allow_ips(&self) -> &str;
+	fn get_entity_type(&self) -> EntityType;
+	fn is_server(&self) -> bool;
 }
 
 ///通道的状态类。放在实体里面了解通道相关状态使用
 /// 并且保存与通道相对应的消息接收者
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 pub struct ChannelStates {
 	id: usize,
 	is_active: bool,
@@ -44,20 +46,9 @@ pub struct ChannelStates {
 	entity_to_channel_common_tx: mpsc::Sender<JsonValue>,
 }
 
-//
-// impl ChannelStates {
-// 	pub fn new() -> Self {
-// 		ChannelStates {
-// 			id: 0,
-// 			is_active: false,
-// 			can_write: false,
-// 			entity_to_channel_priority_tx: None,
-// 			entity_to_channel_common_tx: None,
-// 		}
-// 	}
-// }
 
-pub enum EntityType{
+#[derive(Debug)]
+pub enum EntityType {
 	Custom,
-	Server
+	Server,
 }

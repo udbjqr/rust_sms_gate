@@ -79,6 +79,7 @@ impl ServerEntity {
 		let (channel_to_entity_tx, channel_to_entity_rx) = mpsc::channel(self.read_limit as usize);
 
 		log::info!("通道{},,开始启动处理消息.", self.name);
+
 		//这里开始自己的消息处理
 		get_runtime().spawn(start_entity(manage_to_entity_rx, channel_to_entity_rx, self.id, self.service_id.clone(), self.sp_id.clone(), self.now_channel_number.clone(), EntityType::Server));
 
@@ -147,7 +148,7 @@ impl ServerEntity {
 impl Entity for ServerEntity {
 	async fn login_attach(&self) -> (usize, SmsStatus, u32, u32, Option<mpsc::Receiver<JsonValue>>, Option<mpsc::Receiver<JsonValue>>, Option<mpsc::Sender<JsonValue>>) {
 		if self.max_channel_number <= self.now_channel_number.load(Ordering::Relaxed) as usize {
-			log::warn!("当前已经满。不再继续增加。entity_id:{}", self.id);
+			log::warn!("当前已经满。不再继续增加。entity_id:{},最大可用:{},实际已经:{}", self.id, self.max_channel_number, self.now_channel_number.load(Ordering::Relaxed));
 			return (0, SmsStatus::OtherError, 0, 0, None, None, None);
 		}
 
@@ -189,6 +190,14 @@ impl Entity for ServerEntity {
 	///对请求端来说。所有都允许
 	fn get_allow_ips(&self) -> &str {
 		"0.0.0.0"
+	}
+
+	fn get_entity_type(&self) -> EntityType {
+		EntityType::Server
+	}
+
+	fn is_server(&self) -> bool {
+		false
 	}
 }
 

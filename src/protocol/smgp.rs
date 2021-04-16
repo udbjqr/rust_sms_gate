@@ -1,10 +1,10 @@
 use tokio_util::codec::{LengthDelimitedCodec, Decoder};
-use crate::protocol::implements::{ProtocolImpl, get_time, fill_bytes_zero, load_utf8_string,  decode_msg_content};
+use crate::protocol::implements::{ProtocolImpl, get_time, fill_bytes_zero, load_utf8_string, decode_msg_content, smgp_msg_id_u64_to_str, smgp_msg_id_str_to_u64};
 use bytes::{BytesMut, BufMut, Buf};
 use tokio::io;
 use crate::protocol::{SmsStatus, MsgType};
 use json::JsonValue;
-use crate::protocol::names::{LOGIN_NAME, PASSWORD, VERSION, MSG_TYPE_U32, SEQ_ID, AUTHENTICATOR, MSG_CONTENT, SERVICE_ID, VALID_TIME, AT_TIME, SRC_ID, DEST_IDS, SEQ_IDS, MSG_FMT, MSG_ID, RESULT, SP_ID, DEST_ID, RECEIVE_TIME, SUBMIT_TIME, DONE_TIME, STATE, ERROR_CODE, RESP_NODE_ID, TEXT,  TIMESTAMP};
+use crate::protocol::names::{LOGIN_NAME, PASSWORD, VERSION, MSG_TYPE_U32, SEQ_ID, AUTHENTICATOR, MSG_CONTENT, SERVICE_ID, VALID_TIME, AT_TIME, SRC_ID, DEST_IDS, SEQ_IDS, MSG_FMT, MSG_ID, RESULT,  DEST_ID, SMGP_RECEIVE_TIME, SUBMIT_TIME, DONE_TIME, STATE, ERROR_CODE,  TEXT, TIMESTAMP};
 use crate::protocol::msg_type::MsgType::{Connect, SubmitResp};
 use std::io::Error;
 use encoding::all::UTF_16BE;
@@ -156,20 +156,29 @@ impl ProtocolImpl for Smgp {
 			}
 		};
 
-		let submit_status = self.get_status_id(&status);
+		let dest_ids = if json[DEST_IDS].is_array() {
+			let mut dest_ids = Vec::with_capacity(json[DEST_IDS].len());
+			json[DEST_IDS].members().for_each(|item| dest_ids.push(item.as_str().unwrap()));
 
-		let msg_id = self.create_msg_id();
-		json[MSG_ID] = msg_id.into();
+			dest_ids
+		} else {
+			log::error!("没有dest_ids.退出..json:{}", json);
+			return None;
+		};
+
+		let submit_status = self.get_status_id(&status);
+		let msg_id = self.create_msg_id(dest_ids.len() as u32);
+		let ismg_id  = self.bcd_ismg_id();
 
 		let mut buf = BytesMut::with_capacity(26);
-
 		buf.put_u32(26);
 		buf.put_u32(self.get_type_id(SubmitResp));
 		buf.put_u32(seq_id);
-		buf.put_u16(self.bcd_ismg_id());
+		buf.put_u16(ismg_id);
 		buf.put_u64(msg_id);
 		buf.put_u32(submit_status);
 
+		json[MSG_ID] = smgp_msg_id_u64_to_str(ismg_id,msg_id).into();
 		Some(buf)
 	}
 
@@ -182,23 +191,15 @@ impl ProtocolImpl for Smgp {
 			Some(v) => v
 		};
 
-		let resp_node_id = match json[RESP_NODE_ID].as_u32() {
-			None => {
-				log::error!("没有resp_node_id字串.退出..json:{}", json);
-				return Err(io::Error::new(io::ErrorKind::NotFound, "没有resp_node_id字串"));
-			}
-			Some(v) => v
-		};
-
-		let resp_msg_id = match json[MSG_ID].as_u64() {
+		let (ismg_id,resp_msg_id) = match json[MSG_ID].as_str() {
 			None => {
 				log::error!("没有msg_id字串.退出..json:{}", json);
 				return Err(io::Error::new(io::ErrorKind::NotFound, "没有msg_id字串"));
 			}
-			Some(v) => v
+			Some(v) => smgp_msg_id_str_to_u64(v)
 		};
 
-		let receive_time = match json[RECEIVE_TIME].as_str() {
+		let receive_time = match json[SMGP_RECEIVE_TIME].as_str() {
 			None => {
 				log::error!("没有receive_time.退出..json:{}", json);
 				return Err(io::Error::new(io::ErrorKind::NotFound, "没有receive_time"));
@@ -257,7 +258,7 @@ impl ProtocolImpl for Smgp {
 		dst.put_u32(seq_id);
 
 		dst.put_u16(self.bcd_ismg_id());
-		dst.put_u64(self.create_msg_id()); //上面两个组成 msg_id
+		dst.put_u64(self.create_msg_id(1)); //上面两个组成 msg_id
 		dst.put_u8(1); //IsReport
 		dst.put_u8(0); //MsgFormat
 		fill_bytes_zero(&mut dst, receive_time, 14);//receive_time 14
@@ -265,7 +266,7 @@ impl ProtocolImpl for Smgp {
 		fill_bytes_zero(&mut dst, dest_id, 21);//dest_id 21
 		dst.put_u8(74); //Msg_Length 状态报告长度固定
 
-		dst.put_u16(resp_node_id as u16);
+		dst.put_u16(ismg_id);
 		dst.put_u64(resp_msg_id);
 		dst.extend_from_slice("001".as_bytes()); //sub	3
 		dst.extend_from_slice("001".as_bytes()); //Dlvrd	3
@@ -281,7 +282,15 @@ impl ProtocolImpl for Smgp {
 	}
 
 	fn encode_deliver(&self, json: &mut JsonValue) -> Result<BytesMut, Error> {
-		let receive_time = match json[RECEIVE_TIME].as_str() {
+		let (ismg_id,msg_id) = match json[MSG_ID].as_str() {
+			None => {
+				log::error!("没有msg_id字串.退出..json:{}", json);
+				return Err(io::Error::new(io::ErrorKind::NotFound, "没有msg_id字串"));
+			}
+			Some(v) => smgp_msg_id_str_to_u64(v)
+		};
+
+		let receive_time = match json[SMGP_RECEIVE_TIME].as_str() {
 			None => {
 				log::error!("没有receive_time.退出..json:{}", json);
 				return Err(io::Error::new(io::ErrorKind::NotFound, "没有receive_time"));
@@ -366,8 +375,8 @@ impl ProtocolImpl for Smgp {
 			dst.put_u32(seq_id);
 			seq_ids.push(seq_id);
 
-			dst.put_u16(self.bcd_ismg_id());
-			dst.put_u64(self.create_msg_id());
+			dst.put_u16(ismg_id);
+			dst.put_u64(msg_id);
 
 			dst.put_u8(0); //IsReport
 			dst.put_u8(8); //MsgFormat
@@ -532,9 +541,7 @@ impl ProtocolImpl for Smgp {
 		json[SEQ_ID] = seq.into();
 
 		let mut msg_id_buf = buf.split_to(10);
-		let (ismg_id, msg_id) = self.decode_msg_id(&mut msg_id_buf);
-		json[SP_ID] = ismg_id.into();
-		json[MSG_ID] = msg_id.into();
+		json[MSG_ID] = self.decode_msg_id(&mut msg_id_buf).into();
 		json[RESULT] = buf.get_u32().into();//result 4
 
 		Ok(json)
@@ -546,13 +553,11 @@ impl ProtocolImpl for Smgp {
 		json[SEQ_ID] = seq.into();
 
 		let mut msg_id_buf = buf.split_to(10);
-		let (ismg_id, msg_id) = self.decode_msg_id(&mut msg_id_buf);
-		json[SP_ID] = ismg_id.into();
-		json[MSG_ID] = msg_id.into();
+		json[MSG_ID] = self.decode_msg_id(&mut msg_id_buf).into();
 		let is_report = buf.get_u8(); //Registered_Delivery	1
 		let msg_fmt = buf.get_u8();
 		json[MSG_FMT] = msg_fmt.into(); //Msg_Fmt 1
-		json[RECEIVE_TIME] = load_utf8_string(buf, 14).into(); //RecvTime	14
+		json[SMGP_RECEIVE_TIME] = load_utf8_string(buf, 14).into(); //RecvTime	14
 		json[SRC_ID] = load_utf8_string(buf, 21).into(); //src_id 21
 		json[DEST_ID] = load_utf8_string(buf, 21).into(); //dest_id 21
 
@@ -569,20 +574,19 @@ impl ProtocolImpl for Smgp {
 		};
 
 		if is_report == 0 {
-			//是状态报告.修改一下返回的类型.
-			json[MSG_TYPE_U32] = self.get_type_id(MsgType::Report).into();
 			json[MSG_FMT] = msg_fmt.into(); //Msg_Fmt 1
 			decode_msg_content(&mut content_buf, msg_fmt, msg_content_len, &mut json, is_long_sms)?;
 		} else {
 			let mut msg_id_buf = buf.split_to(10);
-			let (ismg_id, msg_id) = self.decode_msg_id(&mut msg_id_buf);
-			json[SP_ID] = ismg_id.into();
-			json[MSG_ID] = msg_id.into();
+			json[MSG_ID] = self.decode_msg_id(&mut msg_id_buf).into();
 			buf.advance(6); //sub 3  Dlvrd 3
 			json[SUBMIT_TIME] = load_utf8_string(buf, 10).into(); // Submit_time
 			json[DONE_TIME] = load_utf8_string(buf, 10).into(); // Done_time
 			json[STATE] = load_utf8_string(buf, 7).into(); // Stat
 			json[ERROR_CODE] = load_utf8_string(buf, 3).into(); // ERR
+
+			//是状态报告.修改一下返回的类型.
+			json[MSG_TYPE_U32] = self.get_type_id(MsgType::Report).into();
 		}
 
 		Ok(json)
@@ -682,7 +686,8 @@ impl Smgp {
 		result
 	}
 
-	fn create_msg_id(&self) -> u64 {
+	//TODO 这个部分应该需要修改
+	fn create_msg_id(&self, len: u32) -> u64 {
 		let mut result = 0u64;
 		let mut te = get_time() as u64 / 100;
 		let mut e;
@@ -695,7 +700,7 @@ impl Smgp {
 			result = result | (e as u64);
 		};
 
-		te = (get_sequence_id(1) % 1000000) as u64;
+		te = (get_sequence_id(len) % 1000000) as u64;
 		for i in 0..6 {
 			e = te / (10_u64.pow(5 - i));
 			te = te % (10_u64.pow(5 - i));
@@ -740,15 +745,15 @@ impl Smgp {
 		}
 	}
 
-	fn decode_msg_id(&self, buf: &mut BytesMut) -> (u32, u64) {
-		let mut ismg_id = buf.get_u16() as u32;
-		ismg_id = ismg_id << 8 | buf.get_u8() as u32;
+	fn decode_msg_id(&self, buf: &mut BytesMut) -> String {
+		let mut ismg_id = buf.get_u16();
+		ismg_id = ismg_id << 8 | buf.get_u8() as u16;
 
 		let mut msg_id = buf.get_u32() as u64;
 		msg_id = msg_id << 16 | buf.get_u16() as u64;
 		msg_id = msg_id << 8 | buf.get_u8() as u64;
 
-		(ismg_id, msg_id)
+		smgp_msg_id_u64_to_str(ismg_id,msg_id)
 	}
 
 	fn decode_tlvs(&self, buf: &mut BytesMut, tlvs: &mut Vec<SmgpTLV>) {

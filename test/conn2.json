@@ -1,50 +1,25 @@
 {
-	"telecomSensitive": "1",
-	"isThreeBlack": "1",
-	"auditSign": "2",
-	"isCheckMade": 1,
-	"maxRetryCount": 3,
-	"connNum": 1,
-	"content": "0",
-	"isEnable": "1",
-	"signFirst": "0",
-	"password": "123456",
-	"isCheckBlackApi": "0",
-	"payType": "2",
-	"remindPhone": "13699562341",
-	"readLimit": 200,
-	"virtualExtension": "0",
-	"isFourBlack": "1",
-	"isTwoBlack": "1",
-	"writeLimit": 200,
-	"smsType": "0",
-	"sendNumber": "0",
-	"allowedAddr": "141.210.80.10",
-	"checkSendTime": "0",
-	"protocolVersion": "48",
-	"id": 20,
-	"serviceId": "r3TT",
-	"constraintSign": "强制签名",
-	"isMo": "1",
-	"unknownPercentage": 3,
-	"esss": 0,
-	"retryNews": 1,
-	"isCheckSign": "0",
-	"shortSwitch": "0",
-	"isLibrary": "0",
-	"protocolType": 2,
-	"platformPrice": 1,
-	"accessNum": "10682203",
-	"spId": "103996",
-	"spCode": "s",
-	"filterSensitiveStrategy": "2",
-	"isSign": "0",
-	"isPrecontrol": "0",
-	"checkMadeType": "2",
-	"chargeMode": "3",
-	"remindNumber": 3,
-	"isOneBlack": "1",
-	"filterSensitive": "1",
-	"opGroupId": 31,
-	"retrySpace": 10
+	"search": {
+		"url": "",
+		"backcall": "func_name"
+	},
+	"head": [
+		{
+			"name": "序号",
+			"data": "id",
+			"type": "view"
+		},
+		{
+			"name": "操作",
+			"ssss": [
+				{
+					"name": "预览",
+					"op": "function_name",
+					"url": "/xxx/xxx.json",
+					"type": "row"
+				}
+			]
+		}
+	]
 }
+

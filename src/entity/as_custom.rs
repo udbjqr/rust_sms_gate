@@ -92,17 +92,6 @@ impl Entity for CustomEntity {
 			return (0, SmsStatus::OtherError, 0, 0, None, None, None);
 		}
 
-		// //这里已经开了锁。如果下面执行时间有点长。就需要注意。
-		// let mut channels = self.channels.write().await;
-		// let index = channels.iter().rposition(|i| i.is_active == false);
-		//
-		// if index.is_none() {
-		//
-		// }
-		//
-		// let index = index.unwrap();
-		// let item = channels.get_mut(index).unwrap();
-
 		//通过后进行附加上去的动作。
 		let (entity_to_channel_priority_tx, entity_to_channel_priority_rx) = mpsc::channel(0xffffffff);
 		let (entity_to_channel_common_tx, entity_to_channel_common_rx) = mpsc::channel(0xffffffff);
@@ -117,7 +106,7 @@ impl Entity for CustomEntity {
 		let mut save = TEMP_SAVE.write().await;
 		save.insert(index, (entity_to_channel_priority_tx, entity_to_channel_common_tx));
 		let msg = json::object! {
-			msg_type : "create",
+			msg_type : "Connect",
 			entity_id : self.id,
 			channel_id : index,
 		};
@@ -143,6 +132,14 @@ impl Entity for CustomEntity {
 
 	fn get_allow_ips(&self) -> &str {
 		self.allowed_addr.as_str()
+	}
+
+	fn get_entity_type(&self) -> EntityType {
+		EntityType::Custom
+	}
+
+	fn is_server(&self) -> bool {
+		true
 	}
 }
 

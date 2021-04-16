@@ -11,9 +11,8 @@ use crate::entity::EntityManager;
 use crate::protocol::{MsgType, SmsStatus::{self, MessageError, Success}, Protocol};
 use crate::protocol::names::{STATUS, ENTITY_ID, WAIT_RECEIPT, ADDRESS, MSG_TYPE_STR, VERSION, LOGIN_NAME};
 use std::time::{Instant};
-use crate::entity::attach_custom::check_custom_login;
+use crate::entity::as_custom::check_custom_login;
 use std::net::{IpAddr, SocketAddr};
-use crate::global::{message_sender, TOPIC_TO_B_FAILURE};
 
 #[derive(Debug)]
 pub struct Channel {
@@ -232,10 +231,11 @@ impl Channel {
 							error!("解码出现错误,跳过当前消息。{}", e);
 						}
 						None => {
-							self.clear().await;
-							info!("当前连接已经断开。。。。");
+							info!("当前连接已经断开。。。。id:{}",self.id);
+
 							//连接断开的处理。
 							self.tell_entity_disconnect().await;
+							self.clear().await;
 							return;
 						}
 				  }
@@ -308,7 +308,7 @@ impl Channel {
 	async fn tell_entity_disconnect(&mut self) {
 		//发送连接断开消息。
 		let dis = json::object! {
-			msg_type:"close",
+			msg_type:"Terminate",
 			id:self.id,
 		};
 
@@ -375,7 +375,7 @@ impl Channel {
 
 		let entity = if is_server {
 			if let Some((_, en)) = entitys.iter().find(|(_, en)| {
-				en.get_login_name() == login_info[LOGIN_NAME].as_str().unwrap_or("")
+				en.is_server() && en.get_login_name() == login_info[LOGIN_NAME].as_str().unwrap_or("")
 			}) {
 				en
 			} else {
@@ -407,6 +407,7 @@ impl Channel {
 		}
 
 		let (id, status, rx_limit, tx_limit, entity_to_channel_priority_rx, entity_to_channel_common_rx, channel_to_entity_tx) = entity.login_attach().await;
+
 		if let Success = status {
 			// 设置相关的参数
 			self.id = id;
@@ -422,20 +423,23 @@ impl Channel {
 		}
 	}
 
+	//TODO 这里不会结束.bug
 	async fn clear(&mut self) {
 		log::debug!("通道关闭过程.{}", self.id);
 
-		let sender = message_sender();
-		if let Some(entity_to_channel_priority_rx) = self.entity_to_channel_priority_rx.as_mut() {
-			while let Some(msg) = entity_to_channel_priority_rx.recv().await {
-				sender.send(TOPIC_TO_B_FAILURE, "2", msg.to_string().as_str()).await;
-			}
-		}
+		// let sender = message_sender();
+		// if let Some(entity_to_channel_priority_rx) = self.entity_to_channel_priority_rx.as_mut() {
+		// 	while let Some(msg) = entity_to_channel_priority_rx.recv().await {
+		// 		sender.send(TOPIC_TO_B_FAILURE, "2", msg.to_string().as_str()).await;
+		// 	}
+		// }
+		//
+		// if let Some(entity_to_channel_common_rx) = self.entity_to_channel_common_rx.as_mut() {
+		// 	while let Some(msg) = entity_to_channel_common_rx.recv().await {
+		// 		sender.send(TOPIC_TO_B_FAILURE, "2", msg.to_string().as_str()).await;
+		// 	}
+		// }
 
-		if let Some(entity_to_channel_common_rx) = self.entity_to_channel_common_rx.as_mut() {
-			while let Some(msg) = entity_to_channel_common_rx.recv().await {
-				sender.send(TOPIC_TO_B_FAILURE, "2", msg.to_string().as_str()).await;
-			}
-		}
+		log::trace!("通道关闭过程结束.{}", self.id);
 	}
 }

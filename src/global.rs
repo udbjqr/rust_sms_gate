@@ -25,7 +25,7 @@ pub static TOPIC_TO_B_SUBMIT_RESP: &'static str = "toB.submit.response";
 pub static TOPIC_TO_B_DELIVER: &'static str = "toB.deliver";
 pub static TOPIC_TO_B_DELIVER_RESP: &'static str = "toB.deliver.response";
 pub static TOPIC_TO_B_REPORT: &'static str = "toB.report";
-pub static TOPIC_TO_B_REPORT_RESP: &'static str = "toB.report.response";
+pub static TOPIC_TO_B_REPORT_RESP: &'static str = "toB.deliver.response";
 pub static TOPIC_TO_B_FAILURE: &'static str = "sms.send.return.failure";
 
 
@@ -87,7 +87,7 @@ pub fn get_runtime() -> Arc<Runtime> {
 
 			println!("init pool ~~..CPU数量:{}", thread_num);
 			Arc::new(Builder::new_multi_thread()
-				.worker_threads(thread_num)
+				.worker_threads(thread_num * 2)
 				.thread_name_fn(|| {
 					static ATOMIC_ID: AtomicUsize = AtomicUsize::new(0);
 					let id = ATOMIC_ID.fetch_add(1, Ordering::SeqCst);

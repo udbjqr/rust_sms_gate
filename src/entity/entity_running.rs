@@ -3,20 +3,49 @@ use json::JsonValue;
 use std::sync::Arc;
 use crate::entity::{ChannelStates, EntityType};
 use std::collections::HashMap;
-use crate::protocol::names::{MANAGER_TYPE, MSG_TYPE_STR, ID, WAIT_RECEIPT, SEQ_ID, LONG_SMS_TOTAL, SRC_ID, DEST_ID, DEST_IDS, LONG_SMS_NOW_NUMBER, MSG_ID, MSG_CONTENT, MSG_IDS, RECEIVE_TIME, ENTITY_ID, SEQ_IDS, IS_PRIORITY, SP_ID, SERVICE_ID, STATE};
+use crate::protocol::names::{MANAGER_TYPE, MSG_TYPE_STR, ID, WAIT_RECEIPT, SEQ_ID, LONG_SMS_TOTAL, SRC_ID, DEST_ID, DEST_IDS, LONG_SMS_NOW_NUMBER, MSG_ID, MSG_CONTENT, MSG_IDS, RECEIVE_TIME, ENTITY_ID, SEQ_IDS, IS_PRIORITY, SP_ID, SERVICE_ID, STATE, DURATION};
 use crate::protocol::MsgType;
 use crate::global::{TEMP_SAVE, message_sender, TOPIC_TO_B_SUBMIT, TOPIC_TO_B_DELIVER, TOPIC_TO_B_DELIVER_RESP, TOPIC_TO_B_SUBMIT_RESP, TOPIC_TO_B_REPORT_RESP, TOPIC_TO_B_REPORT, TOPIC_TO_B_FAILURE, TOPIC_TO_B_PASSAGE_STATE_CHANGE, TOPIC_TO_B_ACCOUNT_STATE_CHANGE};
 use crate::message_queue::KafkaMessageProducer;
 use std::ops::{Add};
 use std::sync::atomic::AtomicU8;
 use std::sync::atomic::Ordering::SeqCst;
+use std::fmt::{Display, Formatter, Error};
+use std::result;
 
-// #[macro_use]
-// macro_rules! send_entity_state {
-//   (target: $target:expr) => (
-//
-//   );
-// }
+#[macro_use]
+///把超时的消息进行重发
+macro_rules! re_send {
+  ($target: expr) => (
+		// log::trace!("开始进行重发处理.{}",$target.entity_id);
+		let mut re_sends = Vec::with_capacity($target.wait_receipt_map.len());
+		let now = chrono::Local::now().timestamp();
+
+		$target.wait_receipt_map.retain(|_, v| {
+			let receive_time = v[RECEIVE_TIME].as_i64().unwrap_or(0);
+			let duration = v[DURATION].as_i64().unwrap_or(30i64);
+
+			if receive_time + duration < now {
+				re_sends.push(v.to_owned());
+				v[DURATION] = (duration + duration).into();
+
+				false
+			} else {
+				true
+			}
+		});
+
+		while let Some(msg) = re_sends.pop() {
+			send_to_channels(msg.to_owned(), $target).await;
+		}
+  );
+}
+
+macro_rules! send_to_queue {
+	($to_queue: expr, $topic: expr, $key: expr, $json: expr) =>(
+		$to_queue.send($topic, $key, $json.to_string().as_str()).await;
+	)
+}
 
 struct EntityRunContext {
 	entity_id: u32,
@@ -30,6 +59,12 @@ struct EntityRunContext {
 	to_queue: Arc<KafkaMessageProducer>,
 	now_conn_num: Arc<AtomicU8>,
 	state_change_json: JsonValue,
+}
+
+impl Display for EntityRunContext {
+	fn fmt(&self, f: &mut Formatter<'_>) -> result::Result<(), Error> {
+		write!(f, "id:{},type:{:?},service_id:{},sp_id:{},index:{},now_conn_num:{:?},send_channels:{:?}", self.entity_id, self.entity_type, self.service_id, self.sp_id, self.index, self.now_conn_num, self.send_channels)
+	}
 }
 
 pub async fn start_entity(mut manager_to_entity_rx: mpsc::
@@ -52,15 +87,34 @@ Receiver<JsonValue>, mut from_channel: mpsc::Receiver<JsonValue>, entity_id: u32
 						state: 0
 					},
 	};
+	log::trace!("新开始一个entity.{}", context);
 
-	let mut timestamp = chrono::Local::now().timestamp();
-	let duration = 86400;
+	let mut clear_msg_timestamp = chrono::Local::now().timestamp();
+	let clear_msg_duration = 86400 * 4;
+
+	let mut clear_timestamp = chrono::Local::now().timestamp();
+	let clear_duration = 86400;
+
+	let mut re_send_timestamp = chrono::Local::now().timestamp();
+	let re_send_duration = 10;
 
 	loop {
-		//一个时间窗口过去,清除数据
-		if (timestamp + duration) < chrono::Local::now().timestamp() {
-			clear_long_sms_cache(&mut context.long_sms_cache);
-			timestamp = chrono::Local::now().timestamp()
+		//一个时间窗口过去,清除发送数据
+		if (clear_msg_timestamp + clear_msg_duration) < chrono::Local::now().timestamp() {
+			clear_send_sms_cache(&mut context.wait_receipt_map, clear_msg_duration);
+			clear_msg_timestamp = chrono::Local::now().timestamp()
+		}
+
+		//一个时间窗口过去,清除长短信数据
+		if (clear_timestamp + clear_duration) < chrono::Local::now().timestamp() {
+			clear_long_sms_cache(&mut context.long_sms_cache, clear_duration);
+			clear_timestamp = chrono::Local::now().timestamp()
+		}
+
+		//一个时间窗口过去,计算重发
+		if (re_send_timestamp + re_send_duration) < chrono::Local::now().timestamp() {
+			re_send!(&mut context);
+			re_send_timestamp = chrono::Local::now().timestamp()
 		}
 
 		tokio::select! {
@@ -74,12 +128,14 @@ Receiver<JsonValue>, mut from_channel: mpsc::Receiver<JsonValue>, entity_id: u32
 					return;
 				}
 			}
+			_ = tokio::time::sleep(tokio::time::Duration::from_secs(10)) => {
+				//这里就是用来当全部都没有动作的时间打开再次进行循环.
+			}
 		}
 	}
 }
 
-fn clear_long_sms_cache(cache: &mut HashMap<String, Vec<Option<JsonValue>>>) {
-	let duration = 86400;
+fn clear_long_sms_cache(cache: &mut HashMap<String, Vec<Option<JsonValue>>>, duration: i64) {
 	let now = chrono::Local::now().timestamp();
 
 	cache.retain(|_key, value| {
@@ -87,7 +143,6 @@ fn clear_long_sms_cache(cache: &mut HashMap<String, Vec<Option<JsonValue>>>) {
 		value.iter().find(|item| {
 			let mut found = false;
 			if let Some(json) = item {
-				dbg!(now,json[RECEIVE_TIME].as_i64(),);
 				if json[RECEIVE_TIME].as_i64().unwrap_or(0) + duration <= now {
 					found = true;
 				}
@@ -95,6 +150,14 @@ fn clear_long_sms_cache(cache: &mut HashMap<String, Vec<Option<JsonValue>>>) {
 
 			found
 		}).is_none()
+	});
+}
+
+fn clear_send_sms_cache(cache: &mut HashMap<u64, JsonValue>, duration: i64) {
+	let now = chrono::Local::now().timestamp();
+
+	cache.retain(|_key, value| {
+		value[RECEIVE_TIME].as_i64().unwrap_or(now) + duration <= now
 	});
 }
 
@@ -122,42 +185,42 @@ async fn handle_from_channel_rx(msg: Option<JsonValue>, context: &mut EntityRunC
 						(MsgType::ReportResp, _) => {
 							log::trace!("收到回执..移除缓存:{}", &get_key(&msg));
 							context.wait_receipt_map.remove(&get_key(&msg));
-							send_to_queue(&context.to_queue, TOPIC_TO_B_REPORT_RESP, "", msg).await;
+							send_to_queue!(&context.to_queue, TOPIC_TO_B_REPORT_RESP, "", msg);
 						}
 						(MsgType::DeliverResp, _) => {
 							log::trace!("收到回执..移除缓存:{}", &get_key(&msg));
 							context.wait_receipt_map.remove(&get_key(&msg));
-							send_to_queue(&context.to_queue, TOPIC_TO_B_DELIVER_RESP, "", msg).await;
+							send_to_queue!(&context.to_queue, TOPIC_TO_B_DELIVER_RESP, "", msg);
 						}
 						(MsgType::SubmitResp, _) => {
 							log::trace!("收到回执..移除缓存:{}", &get_key(&msg));
 							context.wait_receipt_map.remove(&get_key(&msg));
-							send_to_queue(&context.to_queue, TOPIC_TO_B_SUBMIT_RESP, "", msg).await;
+							send_to_queue!(&context.to_queue, TOPIC_TO_B_SUBMIT_RESP, "", msg);
 						}
 						//收到上传消息
 						(MsgType::Report, Some(false)) |
 						(MsgType::Report, None) => {
-							send_to_queue(&context.to_queue, TOPIC_TO_B_REPORT, "", msg).await;
+							send_to_queue!(&context.to_queue, TOPIC_TO_B_REPORT, "", msg);
 						}
 						//收到上传消息
 						(MsgType::Deliver, Some(false)) |
 						(MsgType::Deliver, None) => {
 							if let Some(total) = msg[LONG_SMS_TOTAL].as_u8() {
 								if let Some(json) = handle_long_sms(context, msg, total) {
-									send_to_queue(&context.to_queue, TOPIC_TO_B_DELIVER, "", json).await;
+									send_to_queue!(&context.to_queue, TOPIC_TO_B_DELIVER, "", json);
 								}
 							} else {
-								send_to_queue(&context.to_queue, TOPIC_TO_B_DELIVER, "", msg).await;
+								send_to_queue!(&context.to_queue, TOPIC_TO_B_DELIVER, "", msg);
 							}
 						}
 						(MsgType::Submit, Some(false)) |
 						(MsgType::Submit, None) => {
 							if let Some(total) = msg[LONG_SMS_TOTAL].as_u8() {
 								if let Some(json) = handle_long_sms(context, msg, total) {
-									send_to_queue(&context.to_queue, TOPIC_TO_B_SUBMIT, "", json).await;
+									send_to_queue!(&context.to_queue, TOPIC_TO_B_SUBMIT, "", json);
 								}
 							} else {
-								send_to_queue(&context.to_queue, TOPIC_TO_B_SUBMIT, "", msg).await;
+								send_to_queue!(&context.to_queue, TOPIC_TO_B_SUBMIT, "", msg);
 							}
 						}
 						(MsgType::Terminate, _) => {
@@ -313,11 +376,6 @@ fn handle_long_sms(context: &mut EntityRunContext, msg: JsonValue, total: u8) ->
 	Some(json)
 }
 
-async fn send_to_queue(to_queue: &Arc<KafkaMessageProducer>, topic: &str, key: &str, json: JsonValue) {
-	to_queue.send(topic, key, json.to_string().as_str()).await;
-}
-
-
 ///entity处理来自于管理器端的消息
 async fn handle_from_manager_rx(msg: Option<JsonValue>, context: &mut EntityRunContext) -> bool {
 	match msg {
@@ -328,7 +386,7 @@ async fn handle_from_manager_rx(msg: Option<JsonValue>, context: &mut EntityRunC
 		Some(msg) => {
 			match msg[MANAGER_TYPE].as_str() {
 				Some("send") => {
-					send_to_channels(msg, context).await
+					send_to_channels(msg, context).await;
 				}
 				Some("passage.request.state") => {
 					log::trace!("收到需要状态的消息。id:{}", context.entity_id);
@@ -370,6 +428,8 @@ async fn send_to_channels(msg: JsonValue, context: &mut EntityRunContext) {
 	if !context.service_id.is_empty() {
 		send_msg[SERVICE_ID] = context.service_id.as_str().into();
 	}
+
+	log::trace!("选择一个可用的channel发送.id:{}..现有通道数:{}", context.entity_id, context.send_channels.len());
 
 	while !context.send_channels.is_empty() {
 		let mut failure = None;
@@ -417,6 +477,7 @@ async fn send_to_channels(msg: JsonValue, context: &mut EntityRunContext) {
 		}
 
 		if let Some((json, channel_id)) = failure {
+			log::trace!("选择通道失败.id:{},channel_id:{}", context.entity_id, channel_id);
 			// 对端可能已经关闭.当前的通道已经不可用,删除通道并且重选.
 			context.send_channels.retain(|item| item.id != channel_id);
 			context.now_conn_num.swap(context.send_channels.len() as u8, SeqCst);

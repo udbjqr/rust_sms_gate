@@ -181,6 +181,7 @@ impl ProtocolImpl for Sgip {
 		Some(dst)
 	}
 
+
 	fn encode_submit_resp(&self, status: SmsStatus, json: &mut JsonValue) -> Option<BytesMut> {
 		let seq_id = match json[SEQ_ID].as_u64() {
 			Some(v) => v,
@@ -199,10 +200,7 @@ impl ProtocolImpl for Sgip {
 		};
 
 		let status = self.get_status_id(&status);
-
-
 		let mut buf = BytesMut::with_capacity(29);
-
 		buf.put_u32(29);
 		buf.put_u32(self.get_type_id(SubmitResp));
 		buf.put_u64(seq_id);
@@ -275,6 +273,29 @@ impl ProtocolImpl for Sgip {
 		Some(buf)
 	}
 
+	fn encode_terminate(&self, json: &mut JsonValue) -> Result<BytesMut, Error> {
+		let node_id = match json[SP_ID].as_u32() {
+			Some(v) => v,
+			None => {
+				log::error!("没有node_id.退出..json:{}", json);
+				return Err(io::Error::new(io::ErrorKind::NotFound, "node_id"));
+			}
+		};
+
+		//状态报告长度固定
+		let mut dst = BytesMut::with_capacity(20);
+
+		dst.put_u32(20);
+		dst.put_u32(self.get_type_id(MsgType::Terminate));
+		dst.put_u32(node_id);
+		let seq_id = (get_time() as u64) << 32 | get_sequence_id(1) as u64;
+		let mut seq_ids = Vec::with_capacity(1);
+		seq_ids.push(seq_id);
+		dst.put_u64(seq_id);
+
+		Ok(dst)
+	}
+
 	fn encode_report(&self, json: &mut JsonValue) -> Result<BytesMut, Error> {
 		let node_id = match json[SP_ID].as_u32() {
 			Some(v) => v,
@@ -291,6 +312,7 @@ impl ProtocolImpl for Sgip {
 				return Err(io::Error::new(io::ErrorKind::NotFound, "resp_node_id"));
 			}
 		};
+
 		let resp_seq_id = match json[RESP_SEQ_ID].as_u64() {
 			Some(v) => v,
 			None => {
@@ -585,7 +607,6 @@ impl ProtocolImpl for Sgip {
 
 		Ok(dst)
 	}
-
 
 	fn decode_connect_resp(&self, buf: &mut BytesMut, node_id: u32, tp: u32) -> Result<JsonValue, io::Error> {
 		let mut json = JsonValue::new_object();

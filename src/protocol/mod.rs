@@ -134,7 +134,7 @@ impl Protocol {
 		match self {
 			Protocol::CMPP48(obj) => match json[MSG_TYPE_STR].as_str() {
 				None => {
-					log::error!("解码出错..没有msg_type_str..msg:{}", json);
+					log::error!("编码出错..没有msg_type_str..msg:{}", json);
 					Err(Error::new(io::ErrorKind::NotFound, format!("没有找到指定的type.json:{}", json)))
 				}
 				Some(msg_type) => {
@@ -144,8 +144,9 @@ impl Protocol {
 						MsgType::Deliver => obj.encode_deliver(json),
 						MsgType::Report => obj.encode_report(json),
 						MsgType::ActiveTest => obj.encode_active_test(json),
+						MsgType::Terminate => obj.encode_terminate(json),
 						_ => {
-							log::error!("解码出错..未知的.msg_type..msg:{}", json);
+							log::error!("编码出错..未知的.msg_type..msg:{}", json);
 							Err(io::Error::new(io::ErrorKind::Other, "还未实现"))
 						}
 					}
@@ -153,7 +154,7 @@ impl Protocol {
 			}
 			Protocol::CMPP32(obj) => match json[MSG_TYPE_STR].as_str() {
 				None => {
-					log::error!("解码出错..没有msg_type_str..msg:{}", json);
+					log::error!("编码出错..没有msg_type_str..msg:{}", json);
 					Err(Error::new(io::ErrorKind::NotFound, format!("没有找到指定的type.json:{}", json)))
 				}
 				Some(msg_type) => {
@@ -163,8 +164,9 @@ impl Protocol {
 						MsgType::Deliver => obj.encode_deliver(json),
 						MsgType::Report => obj.encode_report(json),
 						MsgType::ActiveTest => obj.encode_active_test(json),
+						MsgType::Terminate => obj.encode_terminate(json),
 						_ => {
-							log::error!("解码出错..未知的.msg_type..msg:{}", json);
+							log::error!("编码出错..未知的.msg_type..msg:{}", json);
 							Err(io::Error::new(io::ErrorKind::Other, "还未实现"))
 						}
 					}
@@ -172,7 +174,7 @@ impl Protocol {
 			}
 			Protocol::SMGP(obj) => match json[MSG_TYPE_STR].as_str() {
 				None => {
-					log::error!("解码出错..没有msg_type_str..msg:{}", json);
+					log::error!("编码出错..没有msg_type_str..msg:{}", json);
 					Err(Error::new(io::ErrorKind::NotFound, format!("没有找到指定的type.json:{}", json)))
 				}
 				Some(msg_type) => {
@@ -182,8 +184,9 @@ impl Protocol {
 						MsgType::Deliver => obj.encode_deliver(json),
 						MsgType::Report => obj.encode_report(json),
 						MsgType::ActiveTest => obj.encode_active_test(json),
+						MsgType::Terminate => obj.encode_terminate(json),
 						_ => {
-							log::error!("解码出错..未知的.msg_type..msg:{}", json);
+							log::error!("编码出错..未知的.msg_type..msg:{}", json);
 							Err(io::Error::new(io::ErrorKind::Other, "还未实现"))
 						}
 					}
@@ -191,7 +194,7 @@ impl Protocol {
 			}
 			Protocol::SGIP(obj) => match json[MSG_TYPE_STR].as_str() {
 				None => {
-					log::error!("解码出错..没有msg_type_str..msg:{}", json);
+					log::error!("编码出错..没有msg_type_str..msg:{}", json);
 					Err(Error::new(io::ErrorKind::NotFound, format!("没有找到指定的type.json:{}", json)))
 				}
 				Some(msg_type) => {
@@ -201,8 +204,9 @@ impl Protocol {
 						MsgType::Deliver => obj.encode_deliver(json),
 						MsgType::Report => obj.encode_report(json),
 						MsgType::ActiveTest => obj.encode_active_test(json),
+						MsgType::Terminate => obj.encode_terminate(json),
 						_ => {
-							log::error!("解码出错..未知的.msg_type..msg:{}", json);
+							log::error!("编码出错..未知的.msg_type..msg:{}", json);
 							Err(io::Error::new(io::ErrorKind::Other, "还未实现"))
 						}
 					}
@@ -210,7 +214,7 @@ impl Protocol {
 			}
 			Protocol::SMPP(obj) => match json[MSG_TYPE_STR].as_str() {
 				None => {
-					log::error!("解码出错..没有msg_type_str..msg:{}", json);
+					log::error!("编码出错..没有msg_type_str..msg:{}", json);
 					Err(Error::new(io::ErrorKind::NotFound, format!("没有找到指定的type.json:{}", json)))
 				}
 				Some(msg_type) => {
@@ -220,8 +224,9 @@ impl Protocol {
 						MsgType::Deliver => obj.encode_deliver(json),
 						MsgType::Report => obj.encode_report(json),
 						MsgType::ActiveTest => obj.encode_active_test(json),
+						MsgType::Terminate => obj.encode_terminate(json),
 						_ => {
-							log::error!("解码出错..未知的.msg_type..msg:{}", json);
+							log::error!("编码出错..未知的.msg_type..msg:{}", json);
 							Err(io::Error::new(io::ErrorKind::Other, "还未实现"))
 						}
 					}

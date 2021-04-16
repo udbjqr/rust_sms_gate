@@ -10,7 +10,7 @@ use tokio::io;
 use tokio::sync::{mpsc, RwLock};
 
 use crate::entity::{CustomEntity, Entity};
-use crate::entity::attach_server::ServerEntity;
+use crate::entity::as_server::ServerEntity;
 use crate::get_runtime;
 use crate::global::{load_config_file, TOPIC_FROM_B_SUBMIT, TOPIC_FROM_B_DELIVER, TOPIC_FROM_B_REPORT, TOPIC_PASSAGE_REQUEST_STATE};
 use crate::protocol::names::{MANAGER_TYPE, VERSION, SERVICE_ID, SP_ID, LOGIN_NAME, PASSWORD, ADDRESS, NAME, READ_LIMIT, WRITE_LIMIT, PROTOCOL, MAX_CHANNEL_NUMBER, ALLOW_ADDRS};
