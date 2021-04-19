@@ -13,6 +13,7 @@ use crate::protocol::names::{STATUS, ENTITY_ID, WAIT_RECEIPT, ADDRESS, MSG_TYPE_
 use std::time::{Instant};
 use crate::entity::as_custom::check_custom_login;
 use std::net::{IpAddr, SocketAddr};
+use crate::global::{message_sender, TOPIC_TO_B_FAILURE};
 
 #[derive(Debug)]
 pub struct Channel {
@@ -426,22 +427,23 @@ impl Channel {
 		}
 	}
 
-	//TODO 这里不会结束.bug
 	async fn clear(&mut self) {
 		log::debug!("通道关闭过程.{}", self.id);
 
-		// let sender = message_sender();
-		// if let Some(entity_to_channel_priority_rx) = self.entity_to_channel_priority_rx.as_mut() {
-		// 	while let Some(msg) = entity_to_channel_priority_rx.recv().await {
-		// 		sender.send(TOPIC_TO_B_FAILURE, "2", msg.to_string().as_str()).await;
-		// 	}
-		// }
-		//
-		// if let Some(entity_to_channel_common_rx) = self.entity_to_channel_common_rx.as_mut() {
-		// 	while let Some(msg) = entity_to_channel_common_rx.recv().await {
-		// 		sender.send(TOPIC_TO_B_FAILURE, "2", msg.to_string().as_str()).await;
-		// 	}
-		// }
+		let sender = message_sender();
+		if let Some(entity_to_channel_priority_rx) = self.entity_to_channel_priority_rx.as_mut() {
+			entity_to_channel_priority_rx.close();
+			while let Some(msg) = entity_to_channel_priority_rx.recv().await {
+				sender.send(TOPIC_TO_B_FAILURE, "2", msg.to_string().as_str()).await;
+			}
+		}
+
+		if let Some(entity_to_channel_common_rx) = self.entity_to_channel_common_rx.as_mut() {
+			entity_to_channel_common_rx.close();
+			while let Some(msg) = entity_to_channel_common_rx.recv().await {
+				sender.send(TOPIC_TO_B_FAILURE, "2", msg.to_string().as_str()).await;
+			}
+		}
 
 		log::trace!("通道关闭过程结束.{}", self.id);
 	}
