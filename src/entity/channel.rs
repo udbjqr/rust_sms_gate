@@ -173,7 +173,7 @@ impl Channel {
 		let one_secs = Duration::from_secs(1);
 
 		loop {
-			//一个时间窗口过去,清除数据
+			//一个时间窗口过去.重新计算
 			if timestamp.elapsed() > one_secs {
 				curr_tx = 0;
 				curr_rx = 0;
@@ -195,51 +195,7 @@ impl Channel {
 
 			//根据当前是否已经发满。发送当前是否可用数据。
 			tokio::select! {
-			  msg = framed.next() => {
-					idle_count = 0;
-				  match msg {
-				    Some(Ok(mut json)) => {
-							log::info!("通道收到消息:{}",&json);
-              if curr_rx <= self.rx_limit {
-								//收到消息,生成回执...当收到的不是回执才回返回Some.
-								if let Some(resp) = self.protocol.encode_receipt(SmsStatus::Success,&mut json) {
-									if let Err(e) = channel_to_entity_tx.send(json).await {
-										log::error!("向实体发送消息出现异常, e:{}", e);
-									}
-
-									if let Err(e) = framed.send(resp).await{
-										error!("发送回执出现错误, e:{}", e);
-									}
-								} else {
-									//把回执发回给实体处理回执
-									if let Err(e) = channel_to_entity_tx.send(json).await {
-										log::error!("向实体发送消息出现异常, e:{}", e);
-									}
-								}
-							} else {
-								// 超出,返回流量超出
-								if let Some(resp) = self.protocol.encode_receipt(SmsStatus::TrafficRestrictions,&mut json) {
-									//当消息需要需要返回的才记录接收数量.即: 当消息为返回消息时不进行记录.
-							    curr_rx = curr_rx + 1;
-									if let Err(e) = framed.send(resp).await{
-										error!("发送回执出现错误, e:{}",e);
-									}
-								}
-							}
-						}
-						Some(Err(e)) => {
-							error!("解码出现错误,跳过当前消息。{}", e);
-						}
-						None => {
-							info!("当前连接已经断开。。。。id:{}",self.id);
-
-							//连接断开的处理。
-							self.tell_entity_disconnect().await;
-							self.clear().await;
-							return;
-						}
-				  }
-				}
+				biased;
 				msg = entity_to_channel_priority_rx.recv(),if curr_tx < self.tx_limit => {
 					idle_count = 0;
 					match msg {
@@ -296,6 +252,53 @@ impl Channel {
 						}
 					}
 				}
+				msg = framed.next() => {
+					idle_count = 0;
+				  match msg {
+				    Some(Ok(mut json)) => {
+							log::info!("通道收到消息:{}",&json);
+              if curr_rx <= self.rx_limit {
+								//收到消息,生成回执...当收到的不是回执才回返回Some.
+								if let Some(resp) = self.protocol.encode_receipt(SmsStatus::Success,&mut json) {
+									if let Err(e) = channel_to_entity_tx.send(json).await {
+										log::error!("向实体发送消息出现异常, e:{}", e);
+									}
+
+									if let Err(e) = framed.send(resp).await{
+										error!("发送回执出现错误, e:{}", e);
+									}
+								} else {
+									//把回执发回给实体处理回执
+									if let Err(e) = channel_to_entity_tx.send(json).await {
+										log::error!("向实体发送消息出现异常, e:{}", e);
+									}
+								}
+							} else {
+								// 超出,返回流量超出
+								if let Some(resp) = self.protocol.encode_receipt(SmsStatus::TrafficRestrictions,&mut json) {
+									//当消息需要需要返回的才记录接收数量.即: 当消息为返回消息时不进行记录.
+							    curr_rx = curr_rx + 1;
+									if let Err(e) = framed.send(resp).await{
+										error!("发送回执出现错误, e:{}",e);
+									}
+								}
+							}
+						}
+						Some(Err(e)) => {
+							error!("解码出现错误,跳过当前消息。{}", e);
+						}
+						None => {
+							info!("当前连接已经断开。。。。id:{}",self.id);
+
+							//连接断开的处理。
+							self.tell_entity_disconnect().await;
+							self.clear().await;
+							return;
+						}
+				  }
+				}
+				//用来判断限制发送窗口期已过
+				_ = time::sleep(Instant::now() - timestamp),if curr_tx >= self.tx_limit => {}
 				_ = time::sleep(one_secs) => {
 					//这里就是用来当全部都没有动作的时间打开再次进行循环.
 					//空闲记数
