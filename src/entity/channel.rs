@@ -100,16 +100,16 @@ impl Channel {
 						if let (Success, resp) = self.handle_login(resp, false, ip_addr).await {
 							if let Some(version) = resp[VERSION].as_u32() {
 								self.protocol = self.protocol.match_version(version);
-								log::info!("登录成功 ..更换版本.现在版本:{:?}", self.protocol);
+								log::info!("{}登录成功 ..更换版本.现在版本:{:?}",self.id, self.protocol);
 							}
 						} else {
-							error!("登录后初始化异常。");
+							error!("{}登录后初始化异常.",self.id);
 						}
 
 						Ok(())
 					}
 					_ => {
-						log::error!("登录被拒绝.msg:{}", resp);
+						log::error!("{}登录被拒绝.msg:{}",self.id, resp);
 						Err(io::Error::new(io::ErrorKind::PermissionDenied, format!("登录被拒绝。")))
 					}
 				}
