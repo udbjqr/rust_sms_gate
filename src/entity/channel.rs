@@ -257,7 +257,7 @@ impl Channel {
 					idle_count = 0;
 				  match msg {
 				    Some(Ok(mut json)) => {
-							log::info!("通道收到消息:{}",&json);
+							log::info!("{}通道收到消息:{}",self.id,&json);
               if curr_rx <= self.rx_limit {
 								//收到消息,生成回执...当收到的不是回执才回返回Some.
 								if let Some(resp) = self.protocol.encode_receipt(SmsStatus::Success,&mut json) {
