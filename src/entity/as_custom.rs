@@ -72,7 +72,7 @@ impl CustomEntity {
 		log::debug!("开始进行实体的启动操作。启动消息接收。id:{}", self.id);
 
 		let (manage_to_entity_tx, manage_to_entity_rx) = mpsc::channel(0x50);
-		let (channel_to_entity_tx, channel_to_entity_rx) = mpsc::channel(0x50);
+		let (channel_to_entity_tx, channel_to_entity_rx) = mpsc::channel(0xffffffff);
 
 		log::info!("通道{},,开始启动处理消息.", self.name);
 		//这里开始自己的消息处理

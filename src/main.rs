@@ -19,7 +19,7 @@ fn main() {
 	}
 
 	get_runtime().spawn(async move {
-		message_sender().send(TOPIC_TO_B_LOWER_COMPUTER_INIT, "", "{}").await;
+		message_sender().send(TOPIC_TO_B_LOWER_COMPUTER_INIT, "", "{}".to_string()).await;
 	});
 
 	std::thread::park();

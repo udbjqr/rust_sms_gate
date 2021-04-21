@@ -42,8 +42,8 @@ macro_rules! re_send {
 }
 
 macro_rules! send_to_queue {
-	($to_queue: expr, $topic: expr, $key: expr, $json: expr) =>(
-		$to_queue.send($topic, $key, $json.to_string().as_str()).await;
+	($to_queue: expr, $topic: expr, $key: expr, $json: expr) => (
+		$to_queue.send($topic, $key, $json.to_string()).await;
 	)
 }
 
@@ -169,6 +169,7 @@ async fn handle_from_channel_rx(msg: Option<JsonValue>, context: &mut EntityRunC
 			return false;
 		}
 		Some(mut msg) => {
+			log::trace!("收到通道发来消息。id:{}.msg:{}", context.entity_id, msg);
 			msg[RECEIVE_TIME] = chrono::Local::now().timestamp().into();
 			msg[ENTITY_ID] = context.entity_id.into();
 
@@ -449,7 +450,7 @@ async fn send_to_channels(msg: JsonValue, context: &mut EntityRunContext) {
 						log::error!("选择不到可以发送消息的通道..id:{}", context.entity_id);
 
 						//一个通道都没有的时候.返回错误.同时发连接断开消息
-						context.to_queue.send(TOPIC_TO_B_FAILURE, "", &send_msg.to_string()).await;
+						context.to_queue.send(TOPIC_TO_B_FAILURE, "", send_msg.to_string()).await;
 						context.state_change_json[STATE] = 0.into();
 						// context.to_queue.send(TOPIC_TO_B_PASSAGE_STATE_CHANGE, "", context.state_change_json.to_string().as_str()).await;
 						send_entity_state(context).await;
@@ -490,7 +491,7 @@ async fn send_to_channels(msg: JsonValue, context: &mut EntityRunContext) {
 
 async fn send_entity_state(context: &mut EntityRunContext) {
 	match context.entity_type {
-		EntityType::Custom => context.to_queue.send(TOPIC_TO_B_ACCOUNT_STATE_CHANGE, "", context.state_change_json.to_string().as_str()).await,
-		EntityType::Server => context.to_queue.send(TOPIC_TO_B_PASSAGE_STATE_CHANGE, "", context.state_change_json.to_string().as_str()).await,
+		EntityType::Custom => context.to_queue.send(TOPIC_TO_B_ACCOUNT_STATE_CHANGE, "", context.state_change_json.to_string()).await,
+		EntityType::Server => context.to_queue.send(TOPIC_TO_B_PASSAGE_STATE_CHANGE, "", context.state_change_json.to_string()).await,
 	}
 }

@@ -13,7 +13,7 @@ pub use self::entity_running::start_entity;
 
 
 #[macro_use]
-mod channel;
+pub mod channel;
 mod as_custom;
 mod as_server;
 mod services;

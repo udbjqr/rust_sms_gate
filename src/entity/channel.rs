@@ -100,16 +100,16 @@ impl Channel {
 						if let (Success, resp) = self.handle_login(resp, false, ip_addr).await {
 							if let Some(version) = resp[VERSION].as_u32() {
 								self.protocol = self.protocol.match_version(version);
-								log::info!("{}登录成功 ..更换版本.现在版本:{:?}",self.id, self.protocol);
+								log::info!("{}登录成功 ..更换版本.现在版本:{:?}", self.id, self.protocol);
 							}
 						} else {
-							error!("{}登录后初始化异常.",self.id);
+							error!("{}登录后初始化异常.", self.id);
 						}
 
 						Ok(())
 					}
 					_ => {
-						log::error!("{}登录被拒绝.msg:{}",self.id, resp);
+						log::error!("{}登录被拒绝.msg:{}", self.id, resp);
 						Err(io::Error::new(io::ErrorKind::PermissionDenied, format!("登录被拒绝。")))
 					}
 				}
@@ -258,14 +258,16 @@ impl Channel {
 				  match msg {
 				    Some(Ok(mut json)) => {
 							log::info!("{}通道收到消息:{}",self.id,&json);
-              if curr_rx <= self.rx_limit {
+              if curr_rx < self.rx_limit {
 								//收到消息,生成回执...当收到的不是回执才回返回Some.
-								if let Some(resp) = self.protocol.encode_receipt(SmsStatus::Success,&mut json) {
+								if let Some(resp) = self.protocol.encode_receipt(SmsStatus::Success, &mut json) {
+									//当消息需要需要返回的才记录接收数量
+									curr_rx = curr_rx + 1;
 									if let Err(e) = channel_to_entity_tx.send(json).await {
 										log::error!("向实体发送消息出现异常, e:{}", e);
 									}
 
-									if let Err(e) = framed.send(resp).await{
+									if let Err(e) = framed.send(resp).await {
 										error!("发送回执出现错误, e:{}", e);
 									}
 								} else {
@@ -276,11 +278,17 @@ impl Channel {
 								}
 							} else {
 								// 超出,返回流量超出
-								if let Some(resp) = self.protocol.encode_receipt(SmsStatus::TrafficRestrictions,&mut json) {
-									//当消息需要需要返回的才记录接收数量.即: 当消息为返回消息时不进行记录.
-							    curr_rx = curr_rx + 1;
+								if let Some(resp) = self.protocol.encode_receipt(SmsStatus::TrafficRestrictions, &mut json) {
+									log::debug!("当前超出流量.json:{}.已发:{}.可发:{}",json,curr_rx,self.rx_limit);
+									//当消息需要需要返回的才记录接收数量
+									curr_rx = curr_rx + 1;
 									if let Err(e) = framed.send(resp).await{
 										error!("发送回执出现错误, e:{}",e);
+									}
+								} else {
+									//把回执发回给实体处理回执
+									if let Err(e) = channel_to_entity_tx.send(json).await {
+										log::error!("向实体发送消息出现异常, e:{}", e);
 									}
 								}
 							}
@@ -381,6 +389,7 @@ impl Channel {
 			if let Some((_, en)) = entitys.iter().find(|(_, en)| {
 				en.is_server() && en.get_login_name() == login_info[LOGIN_NAME].as_str().unwrap_or("")
 			}) {
+				log::trace!("找到请求login_name对应的entity:{:?}", en);
 				en
 			} else {
 				log::error!("没有找到对应的login_name.退出.msg:{}", login_info);
@@ -434,14 +443,14 @@ impl Channel {
 		if let Some(entity_to_channel_priority_rx) = self.entity_to_channel_priority_rx.as_mut() {
 			entity_to_channel_priority_rx.close();
 			while let Some(msg) = entity_to_channel_priority_rx.recv().await {
-				sender.send(TOPIC_TO_B_FAILURE, "2", msg.to_string().as_str()).await;
+				sender.send(TOPIC_TO_B_FAILURE, "2", msg.to_string()).await;
 			}
 		}
 
 		if let Some(entity_to_channel_common_rx) = self.entity_to_channel_common_rx.as_mut() {
 			entity_to_channel_common_rx.close();
 			while let Some(msg) = entity_to_channel_common_rx.recv().await {
-				sender.send(TOPIC_TO_B_FAILURE, "2", msg.to_string().as_str()).await;
+				sender.send(TOPIC_TO_B_FAILURE, "2", msg.to_string()).await;
 			}
 		}
 
