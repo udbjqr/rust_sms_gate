@@ -16,7 +16,7 @@ appenders:
         count: 200 # 最大保存压缩文件数
     path: "log/all.log"
     encoder:
-      pattern: "{d(%X%.6f)} [{l}] thread:{T} {f}:{L} - {m}{n}"
+      pattern: "{d(%X%.6f)} [{l}] t:{T} {L} - {m}{n}"
 
   entity:
     kind: rolling_file
@@ -32,7 +32,7 @@ appenders:
         count: 200 # 最大保存压缩文件数
     path: "log/entity.log"
     encoder:
-      pattern: "{d(%X%.6f)} [{l}] thread:{T} {f}:{L} - {m}{n}"
+      pattern: "{d(%X%.6f)} [{l}] t:{T} {L} - {m}{n}"
 
   channel:
     kind: rolling_file
@@ -48,7 +48,7 @@ appenders:
         count: 200 # 最大保存压缩文件数
     path: "log/channel.log"
     encoder:
-      pattern: "{d(%X%.6f)} [{l}] thread:{T} {f}:{L} - {m}{n}"
+      pattern: "{d(%X%.6f)} [{l}] t:{T} {L} - {m}{n}"
 
   protocol:
     kind: rolling_file
@@ -64,8 +64,10 @@ appenders:
         count: 200 # 最大保存压缩文件数
     path: "log/protocol.log"
     encoder:
-      pattern: "{d(%X%.6f)} [{l}] thread:{T} {f}:{L} - {m}{n}"
+      pattern: "{d(%X%.6f)} [{l}] t:{T} {L} - {m}{n}"
 
+
+#pattern: "{d(%X%.6f)} [{l}] t:{T} {f}:{L} - {m}{n}"
 
 loggers:
   sms_gate::entity::channel:

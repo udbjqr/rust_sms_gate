@@ -1,5 +1,5 @@
 use bytes::{BytesMut, Buf, Bytes, BufMut};
-use encoding::all::UTF_16BE;
+use encoding::all::{UTF_16BE, GBK};
 use encoding::{Encoding, DecoderTrap, EncoderTrap};
 use crate::global::get_sequence_id;
 use chrono::{Datelike, DateTime, Local, Timelike};
@@ -1064,6 +1064,10 @@ pub fn decode_msg_content(buf: &mut BytesMut, msg_fmt: u8, mut msg_content_len: 
 	//根据字符集转换.
 	let msg_content = match msg_fmt {
 		8 => match UTF_16BE.decode(&msg_content, DecoderTrap::Strict) {
+			Ok(v) => v,
+			Err(e) => return Err(io::Error::new(io::ErrorKind::Other, e))
+		}
+		15 =>  match GBK.decode(&msg_content, DecoderTrap::Strict) {
 			Ok(v) => v,
 			Err(e) => return Err(io::Error::new(io::ErrorKind::Other, e))
 		}
