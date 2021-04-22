@@ -43,6 +43,8 @@ macro_rules! re_send {
 
 macro_rules! send_to_queue {
 	($to_queue: expr, $topic: expr, $key: expr, $json: expr) => (
+		$json.remove(MANAGER_TYPE);
+		$json.remove(SEQ_ID);
 		$to_queue.send($topic, $key, $json.to_string()).await;
 	)
 }
@@ -207,7 +209,7 @@ async fn handle_from_channel_rx(msg: Option<JsonValue>, context: &mut EntityRunC
 						(MsgType::Deliver, Some(false)) |
 						(MsgType::Deliver, None) => {
 							if let Some(total) = msg[LONG_SMS_TOTAL].as_u8() {
-								if let Some(json) = handle_long_sms(context, msg, total) {
+								if let Some(mut json) = handle_long_sms(context, msg, total) {
 									send_to_queue!(&context.to_queue, TOPIC_TO_B_DELIVER, "", json);
 								}
 							} else {
@@ -217,7 +219,7 @@ async fn handle_from_channel_rx(msg: Option<JsonValue>, context: &mut EntityRunC
 						(MsgType::Submit, Some(false)) |
 						(MsgType::Submit, None) => {
 							if let Some(total) = msg[LONG_SMS_TOTAL].as_u8() {
-								if let Some(json) = handle_long_sms(context, msg, total) {
+								if let Some(mut json) = handle_long_sms(context, msg, total) {
 									send_to_queue!(&context.to_queue, TOPIC_TO_B_SUBMIT, "", json);
 								}
 							} else {

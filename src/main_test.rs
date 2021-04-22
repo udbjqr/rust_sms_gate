@@ -102,17 +102,17 @@ async fn start_work(framed: &mut Framed<TcpStream, Protocol>, protocol: Protocol
 	get_runtime().spawn(async move{
 		let mut count = 0u32;
 		let json = json::object! {
-			msg_content: "【签名】",
+			msg_content: "【签名】1231456234234234231233123123121212",
 			serviceId: "99",
 			spId: "666666",
-			src_id: "10682203987654321",
+			src_id: "1068220312388888888",
 			msg_type:"Submit",
 			dest_ids:[
 				"18179156296"
 			]
 		};
 
-		for i in 0..20000 {
+		for i in 0..1 {
 			if let Err(e) =	tx.send(json.clone()){
 				println!("发送消息错误:{}",e);
 			}
