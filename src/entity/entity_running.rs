@@ -44,7 +44,6 @@ macro_rules! re_send {
 macro_rules! send_to_queue {
 	($to_queue: expr, $topic: expr, $key: expr, $json: expr) => (
 		$json.remove(MANAGER_TYPE);
-		$json.remove(SEQ_ID);
 		$to_queue.send($topic, $key, $json.to_string()).await;
 	)
 }
