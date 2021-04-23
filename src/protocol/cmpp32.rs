@@ -2,7 +2,7 @@ use tokio_util::codec::{LengthDelimitedCodec, Decoder};
 use crate::protocol::implements::{ProtocolImpl, create_cmpp_msg_id, fill_bytes_zero, load_utf8_string, decode_msg_content, cmpp_msg_id_u64_to_str, cmpp_msg_id_str_to_u64};
 use json::JsonValue;
 use bytes::{BytesMut, BufMut, Buf};
-use crate::protocol::names::{AUTHENTICATOR, SEQ_ID, VERSION, MSG_ID, SERVICE_ID, STATE, SUBMIT_TIME, DONE_TIME, SMSC_SEQUENCE, SRC_ID, DEST_ID, SEQ_IDS, MSG_CONTENT, SP_ID, VALID_TIME, AT_TIME, DEST_IDS, MSG_TYPE_U32, RESULT,  MSG_FMT, IS_REPORT};
+use crate::protocol::names::{AUTHENTICATOR, SEQ_ID, VERSION, MSG_ID, SERVICE_ID, STATE, SUBMIT_TIME, DONE_TIME, SMSC_SEQUENCE, SRC_ID, DEST_ID, SEQ_IDS, MSG_CONTENT, SP_ID, VALID_TIME, AT_TIME, DEST_IDS, MSG_TYPE_U32, RESULT, MSG_FMT, IS_REPORT, MSG_IDS};
 use crate::protocol::{MsgType, SmsStatus};
 use std::io::Error;
 use crate::protocol::msg_type::MsgType::SubmitResp;
@@ -318,6 +318,12 @@ impl ProtocolImpl for Cmpp32 {
 				return Err(io::Error::new(io::ErrorKind::NotFound, "没有内容字串"));
 			}
 			Some(v) => v
+		};
+
+		//进行一下检测
+		if !json[MSG_IDS].is_array() {
+			log::error!("没有msg_ids.退出..json:{}", json);
+			return Err(io::Error::new(io::ErrorKind::NotFound, "没有msg_ids"));
 		};
 
 		//编码以后的消息内容

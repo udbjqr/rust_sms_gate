@@ -3,7 +3,7 @@ use json::JsonValue;
 use std::sync::Arc;
 use crate::entity::{ChannelStates, EntityType};
 use std::collections::HashMap;
-use crate::protocol::names::{MANAGER_TYPE, MSG_TYPE_STR, ID, WAIT_RECEIPT, SEQ_ID, LONG_SMS_TOTAL, SRC_ID, DEST_ID, DEST_IDS, LONG_SMS_NOW_NUMBER, MSG_ID, MSG_CONTENT, MSG_IDS, RECEIVE_TIME, ENTITY_ID, SEQ_IDS, IS_PRIORITY, SP_ID, SERVICE_ID, STATE, DURATION};
+use crate::protocol::names::{MANAGER_TYPE, MSG_TYPE_STR, ID, WAIT_RECEIPT, SEQ_ID, LONG_SMS_TOTAL, SRC_ID, DEST_ID, DEST_IDS, LONG_SMS_NOW_NUMBER, MSG_ID, MSG_CONTENT, MSG_IDS, RECEIVE_TIME, ENTITY_ID, SEQ_IDS, IS_PRIORITY, SP_ID, SERVICE_ID, STATE, DURATION, NEED_RE_SEND, ACCOUNT_MSG_ID, PASSAGE_MSG_ID};
 use crate::protocol::MsgType;
 use crate::global::{TEMP_SAVE, message_sender, TOPIC_TO_B_SUBMIT, TOPIC_TO_B_DELIVER, TOPIC_TO_B_DELIVER_RESP, TOPIC_TO_B_SUBMIT_RESP, TOPIC_TO_B_REPORT_RESP, TOPIC_TO_B_REPORT, TOPIC_TO_B_FAILURE, TOPIC_TO_B_PASSAGE_STATE_CHANGE, TOPIC_TO_B_ACCOUNT_STATE_CHANGE};
 use crate::message_queue::KafkaMessageProducer;
@@ -25,7 +25,8 @@ macro_rules! re_send {
 			let receive_time = v[RECEIVE_TIME].as_i64().unwrap_or(0);
 			let duration = v[DURATION].as_i64().unwrap_or(30i64);
 
-			if receive_time + duration < now {
+			//如果超时或者需要重发.
+			if receive_time + duration < now && v[NEED_RE_SEND].as_bool().unwrap_or(true) {
 				re_sends.push(v.to_owned());
 				v[DURATION] = (duration + duration).into();
 
@@ -44,6 +45,8 @@ macro_rules! re_send {
 macro_rules! send_to_queue {
 	($to_queue: expr, $topic: expr, $key: expr, $json: expr) => (
 		$json.remove(MANAGER_TYPE);
+		$json.remove(SEQ_ID);
+		$json.remove(SEQ_IDS);
 		$to_queue.send($topic, $key, $json.to_string()).await;
 	)
 }
@@ -69,8 +72,7 @@ impl Display for EntityRunContext {
 }
 
 pub async fn start_entity(mut manager_to_entity_rx: mpsc::
-Receiver<JsonValue>, mut from_channel: mpsc::Receiver<JsonValue>, entity_id: u32, service_id: String, sp_id: String,
-                          now_conn_num: Arc<AtomicU8>, entity_type: EntityType) {
+Receiver<JsonValue>, mut from_channel: mpsc::Receiver<JsonValue>, entity_id: u32, service_id: String, sp_id: String, now_conn_num: Arc<AtomicU8>, entity_type: EntityType) {
 	let mut context = EntityRunContext {
 		entity_id,
 		entity_type,
@@ -177,12 +179,33 @@ async fn handle_from_channel_rx(msg: Option<JsonValue>, context: &mut EntityRunC
 			match msg[MSG_TYPE_STR].as_str() {
 				Some(v) => {
 					match (v.into(), msg[WAIT_RECEIPT].as_bool()) {
+						(MsgType::SubmitResp, _) => {
+							log::trace!("收到回执..移除缓存:{}", &get_key(&msg));
+							if let Some(source) = context.wait_receipt_map.remove(&get_key(&msg)) {
+								msg[ACCOUNT_MSG_ID] = source[ACCOUNT_MSG_ID].as_str().unwrap_or("").into();
+								msg[PASSAGE_MSG_ID] = msg[MSG_ID].as_str().unwrap_or("").into();
+								msg.remove(MSG_ID);
+							}
+
+							send_to_queue!(&context.to_queue, TOPIC_TO_B_SUBMIT_RESP, "", msg);
+						}
 						//需要等待回执
 						(MsgType::Deliver, Some(true)) |
-						(MsgType::Submit, Some(true)) |
-						(MsgType::Report, Some(true)) => {
-							log::trace!("缓存一个消息.等待回执..消息:{}", msg);
+						(MsgType::Submit, Some(true)) => {
+							log::trace!("缓存消息.等待回执..消息:{}", msg);
 							insert_into_wait_receipt(&mut context.wait_receipt_map, msg);
+						}
+						(MsgType::Report, Some(true)) => {
+							log::trace!("缓存状态报告消息.等待回执..消息:{}", msg);
+							if msg[SEQ_IDS].is_array() && !msg[SEQ_IDS].is_empty() {
+								if let Some(seq_id) = msg[SEQ_IDS][0].as_u64() {
+									context.wait_receipt_map.insert(seq_id, msg);
+								} else {
+									log::error!("insert_into_wait_receipt出现错误。SEQ_IDS内为空...json:{}", msg);
+								}
+							} else {
+								log::error!("insert_into_wait_receipt出现错误。当前未取到SEQ_IDS...json:{}", msg);
+							}
 						}
 						(MsgType::ReportResp, _) => {
 							log::trace!("收到回执..移除缓存:{}", &get_key(&msg));
@@ -191,13 +214,13 @@ async fn handle_from_channel_rx(msg: Option<JsonValue>, context: &mut EntityRunC
 						}
 						(MsgType::DeliverResp, _) => {
 							log::trace!("收到回执..移除缓存:{}", &get_key(&msg));
-							context.wait_receipt_map.remove(&get_key(&msg));
+							if let Some(source) = context.wait_receipt_map.remove(&get_key(&msg)) {
+								msg[ACCOUNT_MSG_ID] = source[ACCOUNT_MSG_ID].as_str().unwrap_or("").into();
+								msg[PASSAGE_MSG_ID] = msg[MSG_ID].as_str().unwrap_or("").into();
+								msg.remove(MSG_ID);
+							}
+
 							send_to_queue!(&context.to_queue, TOPIC_TO_B_DELIVER_RESP, "", msg);
-						}
-						(MsgType::SubmitResp, _) => {
-							log::trace!("收到回执..移除缓存:{}", &get_key(&msg));
-							context.wait_receipt_map.remove(&get_key(&msg));
-							send_to_queue!(&context.to_queue, TOPIC_TO_B_SUBMIT_RESP, "", msg);
 						}
 						//收到上传消息
 						(MsgType::Report, Some(false)) |
@@ -222,6 +245,11 @@ async fn handle_from_channel_rx(msg: Option<JsonValue>, context: &mut EntityRunC
 									send_to_queue!(&context.to_queue, TOPIC_TO_B_SUBMIT, "", json);
 								}
 							} else {
+								let mut msg_ids = Vec::with_capacity(1);
+								msg_ids.push(msg[MSG_ID].as_str().unwrap_or(""));
+								msg[MSG_IDS] = msg_ids.into();
+								msg.remove(MSG_ID);
+
 								send_to_queue!(&context.to_queue, TOPIC_TO_B_SUBMIT, "", msg);
 							}
 						}
@@ -298,16 +326,29 @@ fn get_key(msg: &JsonValue) -> u64 {
 }
 
 fn insert_into_wait_receipt(wait_receipt_map: &mut HashMap<u64, JsonValue>, json: JsonValue) {
-	//如果是长短信。目前只放一条。如果一条收到，就算是全都收到了。
+	//如果是长短信。放多条。重发的时候跳过多余的.
 	//如果当前条未收到。准备全部进行重发。
-	if json[SEQ_IDS].is_array() && !json[SEQ_IDS].is_empty() {
-		if let Some(seq_id) = json[SEQ_IDS][0].as_u64() {
-			wait_receipt_map.insert(seq_id, json);
-		} else {
-			log::error!("insert_into_wait_receipt出现错误。SEQ_IDS内为空...json:{}", json);
+	if json[SEQ_IDS].is_array() && !json[SEQ_IDS].is_empty() &&
+		json[MSG_IDS].is_array() && !json[MSG_IDS].is_empty() {
+		for i in 0..json[SEQ_IDS].members().len() {
+			if let Some(seq_id) = json[SEQ_IDS][i].as_u64() {
+				let mut new_one = json.clone();
+				new_one[NEED_RE_SEND] = (i == 0).into();
+				new_one[ACCOUNT_MSG_ID] = match json[MSG_IDS][i].as_str() {
+					Some(msg_id) => msg_id.into(),
+					None => {
+						log::error!("数据内的msg_ids不足够...json:{}", json);
+						return;
+					}
+				};
+
+				wait_receipt_map.insert(seq_id, new_one);
+			} else {
+				log::error!("insert_into_wait_receipt出现错误。SEQ_IDS内为空...json:{}", json);
+			}
 		}
 	} else {
-		log::error!("insert_into_wait_receipt出现错误。当前未取到SEQ_IDS...json:{}", json);
+		log::error!("insert_into_wait_receipt出现错误。当前未取到SEQ_IDS.或者 msg_ids...json:{}", json);
 	}
 }
 
@@ -358,12 +399,15 @@ fn handle_long_sms(context: &mut EntityRunContext, msg: JsonValue, total: u8) ->
 
 	for item in vec.iter() {
 		let item = item.as_ref().unwrap();
-		let msg_id = match item[MSG_ID].as_u32() {
-			None => get_key(&item),
-			Some(msg_id) => msg_id as u64
+		let msg_id = match item[MSG_ID].as_str() {
+			None => {
+				log::error!("从数据里面没有找到.msg_id字段...{}", item);
+				""
+			}
+			Some(msg_id) => msg_id
 		};
 
-		msg_ids.push(msg_id);
+		msg_ids.push(msg_id.to_owned());
 		msg_content.push_str(item[MSG_CONTENT].as_str().unwrap_or(""));
 	}
 
@@ -372,6 +416,8 @@ fn handle_long_sms(context: &mut EntityRunContext, msg: JsonValue, total: u8) ->
 	json[MSG_CONTENT] = msg_content.as_str().into();
 	json[MSG_IDS] = msg_ids.into();
 	json.remove(MSG_ID);
+	json.remove(LONG_SMS_TOTAL);
+	json.remove(LONG_SMS_NOW_NUMBER);
 
 	context.long_sms_cache.remove(&key);
 

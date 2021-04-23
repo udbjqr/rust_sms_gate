@@ -11,7 +11,7 @@ use crate::global::FILL_ZERO;
 use crate::protocol::msg_type::MsgType::{Connect, SubmitResp};
 use tokio::io::Error;
 use crate::protocol::msg_type::SmsStatus;
-use crate::protocol::names::{SEQ_ID, AUTHENTICATOR, VERSION, STATUS, MSG_TYPE_U32, MSG_CONTENT, MSG_ID, SERVICE_ID, TP_UDHI, SP_ID, VALID_TIME, AT_TIME, SRC_ID, MSG_FMT, DEST_IDS, RESULT, DEST_ID, STATE, SUBMIT_TIME, DONE_TIME, SMSC_SEQUENCE, IS_REPORT, MSG_TYPE_STR, LONG_SMS_TOTAL, LONG_SMS_NOW_NUMBER, SEQ_IDS, LOGIN_NAME, PASSWORD, TIMESTAMP};
+use crate::protocol::names::{SEQ_ID, AUTHENTICATOR, VERSION, STATUS, MSG_TYPE_U32, MSG_CONTENT, MSG_ID, SERVICE_ID, TP_UDHI, SP_ID, VALID_TIME, AT_TIME, SRC_ID, MSG_FMT, DEST_IDS, RESULT, DEST_ID, STATE, SUBMIT_TIME, DONE_TIME, SMSC_SEQUENCE, IS_REPORT, MSG_TYPE_STR, LONG_SMS_TOTAL, LONG_SMS_NOW_NUMBER, SEQ_IDS, LOGIN_NAME, PASSWORD, TIMESTAMP, MSG_IDS};
 use crate::protocol::MsgType;
 use std::ops::Add;
 
@@ -509,12 +509,10 @@ pub trait ProtocolImpl: Send + Sync {
 	}
 
 	fn encode_deliver(&self, json: &mut JsonValue) -> Result<BytesMut, Error> {
-		let msg_id = match json[MSG_ID].as_str() {
-			None => {
-				log::error!("没有msg_id字串.退出..json:{}", json);
-				return Err(io::Error::new(io::ErrorKind::NotFound, "没有msg_id字串"));
-			}
-			Some(v) => cmpp_msg_id_str_to_u64(v)
+		//进行一下检测
+		if !json[MSG_IDS].is_array() {
+			log::error!("没有msg_ids.退出..json:{}", json);
+			return Err(io::Error::new(io::ErrorKind::NotFound, "没有msg_ids"));
 		};
 
 		let msg_content = match json[MSG_CONTENT].as_str() {
@@ -594,7 +592,7 @@ pub trait ProtocolImpl: Send + Sync {
 			seq_ids.push(seq_id);
 			dst.put_u32(seq_id);
 
-			dst.put_u64(msg_id); //Msg_Id 8
+			dst.put_u64(cmpp_msg_id_str_to_u64(json[MSG_IDS][i].as_str().unwrap_or(""))); //Msg_Id 8
 			fill_bytes_zero(&mut dst, dest_id, 21);//dest_id 21
 			fill_bytes_zero(&mut dst, service_id, 10);//service_id 10
 			dst.put_u8(0); //TP_pid 1
@@ -680,6 +678,12 @@ pub trait ProtocolImpl: Send + Sync {
 		} else {
 			log::error!("没有dest_ids.退出..json:{}", json);
 			return Err(io::Error::new(io::ErrorKind::NotFound, "没有dest_ids"));
+		};
+
+		//进行一下检测
+		if !json[MSG_IDS].is_array() {
+			log::error!("没有msg_ids.退出..json:{}", json);
+			return Err(io::Error::new(io::ErrorKind::NotFound, "没有msg_ids"));
 		};
 
 		let seq_id = match json[SEQ_ID].as_u64() {
@@ -928,12 +932,12 @@ pub fn copy_to_bytes(buf: &mut BytesMut, len: usize) -> Bytes {
 }
 
 //TODO 这里需要进行些修改
-pub fn smgp_msg_id_str_to_u64(msg_id: &str) -> (u16,u64) {
-	(0,msg_id.parse().unwrap_or(0))
+pub fn smgp_msg_id_str_to_u64(msg_id: &str) -> (u16, u64) {
+	(0, msg_id.parse().unwrap_or(0))
 }
 
 //TODO 这里需要进行些修改
-pub fn smgp_msg_id_u64_to_str(ismg_id: u16,  msg_id: u64) -> String {
+pub fn smgp_msg_id_u64_to_str(ismg_id: u16, msg_id: u64) -> String {
 	ismg_id.to_string().add(msg_id.to_string().as_str())
 }
 
@@ -1003,9 +1007,14 @@ pub fn cmpp_msg_id_u64_to_str(mut msg_id: u64) -> String {
 }
 
 pub fn cmpp_msg_id_str_to_u64(msg_id: &str) -> u64 {
+	if msg_id.is_empty() {
+		return create_cmpp_msg_id(1);
+	}
+
 	// if !msg_id.as_bytes().is_ascii() {
 	//
 	// }
+
 	let (month, dd) = msg_id.split_at(2);
 	let month: u64 = month.parse().unwrap_or(0);
 	let (day, dd) = dd.split_at(2);
@@ -1067,7 +1076,7 @@ pub fn decode_msg_content(buf: &mut BytesMut, msg_fmt: u8, mut msg_content_len: 
 			Ok(v) => v,
 			Err(e) => return Err(io::Error::new(io::ErrorKind::Other, e))
 		}
-		15 =>  match GBK.decode(&msg_content, DecoderTrap::Strict) {
+		15 => match GBK.decode(&msg_content, DecoderTrap::Strict) {
 			Ok(v) => v,
 			Err(e) => return Err(io::Error::new(io::ErrorKind::Other, e))
 		}

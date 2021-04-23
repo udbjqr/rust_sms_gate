@@ -17,7 +17,8 @@ use tokio::sync::mpsc;
 
 fn main() {
 	get_runtime().spawn(async move {
-		let addr = "118.31.45.242:7890".parse().unwrap();
+		// let addr = "118.31.45.242:7890".parse().unwrap();
+		let addr = "192.168.101.99:7890".parse().unwrap();
 		let socket = TcpSocket::new_v4().unwrap();
 		let stream = socket.connect(addr).await.unwrap();
 
@@ -25,9 +26,12 @@ fn main() {
 		let mut framed = Framed::new(stream, protocol.clone());
 
 		let mut login_msg = json::object! {
-				loginName: "666888",
-				password: "123",
-				gatewayIp: "118.31.45.242:7890",
+				// loginName: "666888",
+				// password: "123",
+				//gatewayIp: "118.31.45.242:7890",
+				loginName: "103996",
+				password: "123456",
+				gatewayIp: "192.168.101.99:7890",
 				protocolVersion: 48u32,
 				msg_type: "Connect"
 			};
@@ -102,14 +106,15 @@ async fn start_work(framed: &mut Framed<TcpStream, Protocol>, protocol: Protocol
 	get_runtime().spawn(async move{
 		let mut count = 0u32;
 		let json = json::object! {
-			msg_content: "【签名】测试长短信内容,测试长短信内容,测试长短信内容,测试长短信内容,测试长短信内容,测试长短信内容,测试长短信内容,测试长短信内容,测试长短信内容,测试长短信内容,测试长短信内容测试长短信内容,测试长短信内容,测试长短信内容,测试长短信内容,测试长短信内容,测试长短信内容,测试长短信内容,测试长短信内容,测试长短信内容,测试长短信内容,测试长短信内容",
+			msg_content: "【签名】测试",
 			serviceId: "99",
 			spId: "666666",
 			src_id: "10693100048886661234",
 			msg_type:"Submit",
 			dest_ids:[
 				"18179156296"
-			]
+			],
+			msg_ids:["042314331994803057760"]
 		};
 
 		for i in 0..1 {

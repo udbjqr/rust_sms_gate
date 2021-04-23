@@ -4,7 +4,7 @@ use bytes::{BytesMut, BufMut, Buf};
 use tokio::io;
 use crate::protocol::{SmsStatus, MsgType};
 use json::JsonValue;
-use crate::protocol::names::{LOGIN_NAME, PASSWORD, VERSION, MSG_TYPE_U32, SEQ_ID, AUTHENTICATOR, MSG_CONTENT, SERVICE_ID, VALID_TIME, AT_TIME, SRC_ID, DEST_IDS, SEQ_IDS, MSG_FMT, MSG_ID, RESULT,  DEST_ID, SMGP_RECEIVE_TIME, SUBMIT_TIME, DONE_TIME, STATE, ERROR_CODE,  TEXT, TIMESTAMP};
+use crate::protocol::names::{LOGIN_NAME, PASSWORD, VERSION, MSG_TYPE_U32, SEQ_ID, AUTHENTICATOR, MSG_CONTENT, SERVICE_ID, VALID_TIME, AT_TIME, SRC_ID, DEST_IDS, SEQ_IDS, MSG_FMT, MSG_ID, RESULT, DEST_ID, SMGP_RECEIVE_TIME, SUBMIT_TIME, DONE_TIME, STATE, ERROR_CODE, TEXT, TIMESTAMP, MSG_IDS};
 use crate::protocol::msg_type::MsgType::{Connect, SubmitResp};
 use std::io::Error;
 use encoding::all::UTF_16BE;
@@ -409,6 +409,12 @@ impl ProtocolImpl for Smgp {
 				return Err(io::Error::new(io::ErrorKind::NotFound, "没有内容字串"));
 			}
 			Some(v) => v
+		};
+
+		//进行一下检测
+		if !json[MSG_IDS].is_array() {
+			log::error!("没有msg_ids.退出..json:{}", json);
+			return Err(io::Error::new(io::ErrorKind::NotFound, "没有msg_ids"));
 		};
 
 		//编码以后的消息内容
