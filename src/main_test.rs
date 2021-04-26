@@ -5,7 +5,7 @@ use sms_gate::entity::channel::Channel;
 use tokio::net::{TcpSocket, TcpStream};
 use sms_gate::get_runtime;
 use tokio_util::codec::Framed;
-use sms_gate::protocol::Protocol::{CMPP32, CMPP48};
+use sms_gate::protocol::Protocol::{CMPP32, CMPP48, SMGP};
 use sms_gate::protocol::cmpp32::Cmpp32;
 use sms_gate::protocol::{Cmpp48, ProtocolImpl, MsgType, SmsStatus, Protocol};
 use futures::{SinkExt, StreamExt};
@@ -14,25 +14,26 @@ use sms_gate::protocol::names::{ENTITY_ID, MSG_TYPE_STR, STATUS, VERSION};
 use std::time::{Instant, Duration};
 use json::JsonValue;
 use tokio::sync::mpsc;
+use sms_gate::protocol::smgp::Smgp;
 
 fn main() {
+	simple_logger::SimpleLogger::init(Default::default());
 	get_runtime().spawn(async move {
 		// let addr = "118.31.45.242:7890".parse().unwrap();
-		let addr = "192.168.101.99:7890".parse().unwrap();
+		let addr = "219.146.23.81:5020".parse().unwrap();
 		let socket = TcpSocket::new_v4().unwrap();
 		let stream = socket.connect(addr).await.unwrap();
 
-		let mut protocol = CMPP48(Cmpp48::new());
+		let mut protocol = SMGP(Smgp::new());
 		let mut framed = Framed::new(stream, protocol.clone());
 
 		let mut login_msg = json::object! {
 				// loginName: "666888",
 				// password: "123",
 				//gatewayIp: "118.31.45.242:7890",
-				loginName: "103996",
-				password: "123456",
-				gatewayIp: "192.168.101.99:7890",
-				protocolVersion: 48u32,
+				loginName: "101016",
+				password: "S6#j7Fgc!CXe",
+				protocolVersion: 30u32,
 				msg_type: "Connect"
 			};
 

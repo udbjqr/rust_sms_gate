@@ -4,6 +4,9 @@
 use tokio::time::Instant;
 use crate::get_runtime;
 use tokio::time;
+use crate::protocol::Protocol::SMGP;
+use crate::protocol::smgp::Smgp;
+use crate::protocol::ProtocolImpl;
 
 mod entity;
 
@@ -29,4 +32,16 @@ fn test_json() {
 }
 
 
+#[test]
+fn test_smgpconnect() {
+	let c = Smgp::new();
+	let mut json = json::object! {
+		loginName:"101016",
+		password:"S6#j7Fgc!CXe",
+	};
+
+	let e = c.encode_connect(&mut json).unwrap();
+
+	println!("{:X}",e);
+}
 

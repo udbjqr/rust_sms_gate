@@ -21,7 +21,7 @@ pub use crate::protocol::implements::ProtocolImpl;
 
 ///协议的对应部分。用来编码和解码
 mod cmpp48;
-mod smgp;
+pub mod smgp;
 mod sgip;
 mod msg_type;
 pub mod names;
