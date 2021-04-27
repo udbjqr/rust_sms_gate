@@ -389,7 +389,7 @@ impl Channel {
 			if let Some((_, en)) = entitys.iter().find(|(_, en)| {
 				en.is_server() && en.get_login_name() == login_info[LOGIN_NAME].as_str().unwrap_or("")
 			}) {
-				log::trace!("找到请求login_name对应的entity:{:?}", en);
+				log::trace!("找到请求loginName对应的entity:{:?}", en);
 				en
 			} else {
 				log::error!("没有找到对应的login_name.退出.msg:{}", login_info);

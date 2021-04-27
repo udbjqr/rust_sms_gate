@@ -433,8 +433,8 @@ pub trait ProtocolImpl: Send + Sync {
 		let stat = match json[STATE].as_str() {
 			Some(v) => v,
 			None => {
-				log::error!("没有stat.退出..json:{}", json);
-				return Err(io::Error::new(io::ErrorKind::NotFound, "没有stat"));
+				log::error!("没有state.退出..json:{}", json);
+				return Err(io::Error::new(io::ErrorKind::NotFound, "没有state"));
 			}
 		};
 

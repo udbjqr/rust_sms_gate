@@ -139,10 +139,10 @@ impl ProtocolImpl for Smgp {
 		dst.put_u32(get_sequence_id(1));
 
 		fill_bytes_zero(&mut dst, client_id, 8);  //ClientID	8
-		dst.extend_from_slice(self.get_auth(client_id, password, get_time()).as_ref());
+		dst.extend_from_slice(self.get_auth(client_id, password, time).as_ref());
 		dst.put_u8(2);//"LoginMode"	1 2:收发消息
 		dst.put_u32(time); //TimeStamp"	4	Integer
-		dst.put_u8(48); //ClientVersion  1  Integer
+		dst.put_u8(0x13); //ClientVersion  1  Integer
 
 		Ok(dst)
 	}

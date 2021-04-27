@@ -93,7 +93,7 @@ pub fn get_runtime() -> Arc<Runtime> {
 					let id = ATOMIC_ID.fetch_add(1, Ordering::SeqCst);
 					format!("工作{}", id)
 				})
-				.thread_stack_size(2 * 1024 * 1024)
+				.thread_stack_size(5 * 1024 * 1024)
 				.enable_all()
 				.on_thread_start(|| {
 					println!("线程`{}`启动。。。", std::thread::current().name().unwrap())

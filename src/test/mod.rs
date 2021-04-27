@@ -7,6 +7,7 @@ use tokio::time;
 use crate::protocol::Protocol::SMGP;
 use crate::protocol::smgp::Smgp;
 use crate::protocol::ProtocolImpl;
+use crate::protocol::implements::get_time;
 
 mod entity;
 
@@ -36,12 +37,19 @@ fn test_json() {
 fn test_smgpconnect() {
 	let c = Smgp::new();
 	let mut json = json::object! {
-		loginName:"101016",
-		password:"S6#j7Fgc!CXe",
+		loginName:"103996",
+		password:"123456",
+		protocolVersion: 48,
+		msg_type: "Connect"
 	};
 
 	let e = c.encode_connect(&mut json).unwrap();
 
-	println!("{:X}",e);
+	println!("{:x}",e);
+}
+
+#[test]
+fn test_test() {
+	println!("{}",get_time());
 }
 
