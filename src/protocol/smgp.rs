@@ -487,9 +487,9 @@ impl ProtocolImpl for Smgp {
 		};
 
 		//长短信的话,一次性生成多条记录
-		//163是除开内容\发送号码之后所有长度加在一起 6是长短信消息头长度
+		//126是除开内容\发送号码之后所有长度加在一起 6是长短信消息头长度
 		//还需要增加相应的tlv的长度.这里只有一个.
-		let total_len = sms_len * (126 + dest_ids.len() * 21 + msg_content_head_len + tlv_len) + msg_content_len;
+		let total_len = sms_len * (125 + dest_ids.len() * 21 + msg_content_head_len + tlv_len) + msg_content_len;
 
 		// 126 + msg_content_len + dest_ids.len() * 21;
 		let mut dst = BytesMut::with_capacity(total_len);
@@ -502,7 +502,7 @@ impl ProtocolImpl for Smgp {
 				&msg_content_code[(i * one_content_len)..((i + 1) * one_content_len)]
 			};
 
-			dst.put_u32((126 + dest_ids.len() * 21 + msg_content_head_len + this_msg_content.len() + tlv_len) as u32);
+			dst.put_u32((125 + dest_ids.len() * 21 + msg_content_head_len + this_msg_content.len() + tlv_len) as u32);
 			dst.put_u32(self.get_type_id(MsgType::Submit));
 			let seq_id = get_sequence_id(dest_ids.len() as u32);
 			seq_ids.push(seq_id);
@@ -512,15 +512,15 @@ impl ProtocolImpl for Smgp {
 			dst.put_u8(1); //NeedReport
 			dst.put_u8(2); //Priority
 			fill_bytes_zero(&mut dst, service_id, 10);//Service_Id
-			dst.extend_from_slice("01".as_bytes());//FeeType
-			dst.extend_from_slice("000001".as_bytes());//FixedFee
+			dst.extend_from_slice("00".as_bytes());//FeeType
+			dst.extend_from_slice("000000".as_bytes());//FixedFee
 			dst.put_u8(8); //MsgFormat
 			fill_bytes_zero(&mut dst, valid_time, 17);  //valid_time
 			fill_bytes_zero(&mut dst, at_time, 17);  //at_time
 			fill_bytes_zero(&mut dst, src_id, 21);  //src_id
 			dst.extend_from_slice(&FILL_ZERO[0..21]);//ChargeTermID
 			dst.put_u8(dest_ids.len() as u8); //DestTermIDCount
-			dest_ids.iter().for_each(|dest_id| fill_bytes_zero(&mut dst, dest_id, 32));  //dest_id
+			dest_ids.iter().for_each(|dest_id| fill_bytes_zero(&mut dst, dest_id, 21));  //dest_id
 			dst.put_u8(this_msg_content.len() as u8 + msg_content_head_len as u8); //Msg_Length
 			if msg_content_head_len > 0 {
 				dst.put_u8(5);
@@ -531,7 +531,7 @@ impl ProtocolImpl for Smgp {
 				dst.put_u8((i + 1) as u8);
 			}
 			dst.extend_from_slice(&this_msg_content[..]); //Msg_Content
-			dst.extend_from_slice(&FILL_ZERO[0..20]); //LinkID
+			dst.extend_from_slice(&FILL_ZERO[0..8]); //LinkID
 
 			if !tlvs.is_empty() { self.coder_tlv(&mut dst, &tlvs); }
 		}
