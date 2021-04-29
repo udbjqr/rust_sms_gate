@@ -20,7 +20,7 @@ fn main() {
 	simple_logger::SimpleLogger::init(Default::default());
 	get_runtime().spawn(async move {
 		// let addr = "118.31.45.242:7890".parse().unwrap();
-		let addr = "219.146.23.81:5020".parse().unwrap();
+		let addr = "42.99.16.84:8890".parse().unwrap();
 		let socket = TcpSocket::new_v4().unwrap();
 		let stream = socket.connect(addr).await.unwrap();
 
@@ -28,8 +28,8 @@ fn main() {
 		let mut framed = Framed::new(stream, protocol.clone());
 
 		let mut login_msg = json::object! {
-				loginName: "101016",
-				password: "S6#j7Fgc!CXe",
+				loginName: "100980",
+				password: "0G*&ZWLbhkv1",
 				// gatewayIp: "118.31.45.242:7890",
 				// loginName: "101016",
 				// password: "S6#j7Fgc!CXe",
@@ -109,8 +109,8 @@ async fn start_work(framed: &mut Framed<TcpStream, Protocol>, protocol: Protocol
 		let json = json::object! {
 			msg_content: "cttest",
 			serviceId: "99",
-			spId: "101016",
-			src_id: "106830741234567",
+			spId: "10681874",
+			src_id: "10681874991234567",
 			msg_type:"Submit",
 			dest_ids:[
 				"17333173834"
