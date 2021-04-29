@@ -7,7 +7,7 @@ use json::JsonValue;
 use crate::protocol::names::{LOGIN_NAME, PASSWORD, VERSION, MSG_TYPE_U32, SEQ_ID, AUTHENTICATOR, MSG_CONTENT, SERVICE_ID, VALID_TIME, AT_TIME, SRC_ID, DEST_IDS, SEQ_IDS, MSG_FMT, MSG_ID, RESULT, DEST_ID, SMGP_RECEIVE_TIME, SUBMIT_TIME, DONE_TIME, STATE, ERROR_CODE, TEXT, TIMESTAMP, MSG_IDS};
 use crate::protocol::msg_type::MsgType::{Connect, SubmitResp};
 use std::io::Error;
-use encoding::all::UTF_16BE;
+use encoding::all::GBK;
 use encoding::{EncoderTrap, Encoding};
 use crate::global::{get_sequence_id, FILL_ZERO};
 use crate::global::ISMG_ID;
@@ -307,7 +307,7 @@ impl ProtocolImpl for Smgp {
 		};
 
 		//编码以后的消息内容
-		let msg_content_code = match UTF_16BE.encode(msg_content, EncoderTrap::Strict) {
+		let msg_content_code = match GBK.encode(msg_content, EncoderTrap::Strict) {
 			Ok(v) => v,
 			Err(e) => {
 				log::error!("字符串内容解码出现错误..json:{}.e:{}", json, e);
@@ -379,7 +379,7 @@ impl ProtocolImpl for Smgp {
 			dst.put_u64(msg_id);
 
 			dst.put_u8(0); //IsReport
-			dst.put_u8(8); //MsgFormat
+			dst.put_u8(15); //MsgFormat
 			fill_bytes_zero(&mut dst, receive_time, 14);//receive_time 14
 			fill_bytes_zero(&mut dst, src_id, 21);//src_id 21
 			fill_bytes_zero(&mut dst, dest_id, 21);//dest_id 21
@@ -418,7 +418,7 @@ impl ProtocolImpl for Smgp {
 		};
 
 		//编码以后的消息内容
-		let msg_content_code = match UTF_16BE.encode(msg_content, EncoderTrap::Strict) {
+		let msg_content_code = match GBK.encode(msg_content, EncoderTrap::Strict) {
 			Ok(v) => v,
 			Err(e) => {
 				log::error!("字符串内容解码出现错误..json:{}.e:{}", json, e);
@@ -514,7 +514,7 @@ impl ProtocolImpl for Smgp {
 			fill_bytes_zero(&mut dst, service_id, 10);//Service_Id
 			dst.extend_from_slice("00".as_bytes());//FeeType
 			dst.extend_from_slice("000000".as_bytes());//FixedFee
-			dst.put_u8(8); //MsgFormat
+			dst.put_u8(15); //MsgFormat
 			fill_bytes_zero(&mut dst, valid_time, 17);  //valid_time
 			fill_bytes_zero(&mut dst, at_time, 17);  //at_time
 			fill_bytes_zero(&mut dst, src_id, 21);  //src_id
