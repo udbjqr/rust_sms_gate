@@ -33,7 +33,7 @@ fn main() {
 				// gatewayIp: "118.31.45.242:7890",
 				// loginName: "101016",
 				// password: "S6#j7Fgc!CXe",
-				protocolVersion: 0x13u32,
+				protocolVersion: 0x30u32,
 				msg_type: "Connect"
 			};
 
@@ -109,13 +109,13 @@ async fn start_work(framed: &mut Framed<TcpStream, Protocol>, protocol: Protocol
 		let json = json::object! {
 			msg_content: "【签名】测试",
 			serviceId: "99",
-			spId: "666666",
+			spId: "101016",
 			src_id: "106830741234567",
 			msg_type:"Submit",
 			dest_ids:[
-				"18179156296"
+				"17333173834"
 			],
-			msg_ids:["042314331994803057760"]
+			msg_ids:["042911301994803057760"]
 		};
 
 		for i in 0..1 {
