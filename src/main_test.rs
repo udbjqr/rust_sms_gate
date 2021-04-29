@@ -107,7 +107,7 @@ async fn start_work(framed: &mut Framed<TcpStream, Protocol>, protocol: Protocol
 	get_runtime().spawn(async move{
 		let mut count = 0u32;
 		let json = json::object! {
-			msg_content: "【签名】测试",
+			msg_content: "cttest",
 			serviceId: "99",
 			spId: "101016",
 			src_id: "106830741234567",
