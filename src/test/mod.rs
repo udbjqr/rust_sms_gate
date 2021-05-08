@@ -13,10 +13,11 @@ mod entity;
 
 
 #[test]
-fn test_json() {
+fn test_json2() {
 	// time::Duration::from_millis();
 	let d = get_runtime().spawn(async move {
 		loop {
+			let b = crate::global::get_sequence_id(1);
 			tokio::select! {
 				biased;
 				_ = time::sleep(time::Duration::from_secs(2)) =>{
@@ -29,8 +30,9 @@ fn test_json() {
 		}
 	});
 
-	std::thread::sleep(time::Duration::from_secs(5));
+	std::thread::sleep(time::Duration::from_secs(15));
 }
+
 
 
 #[test]

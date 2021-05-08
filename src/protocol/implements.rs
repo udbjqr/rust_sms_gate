@@ -686,13 +686,6 @@ pub trait ProtocolImpl: Send + Sync {
 			return Err(io::Error::new(io::ErrorKind::NotFound, "没有msg_ids"));
 		};
 
-		let seq_id = match json[SEQ_ID].as_u64() {
-			None => {
-				get_sequence_id(dest_ids.len() as u32)
-			}
-			Some(v) => v as u32
-		};
-
 		let msg_content_len = msg_content_code.len();
 
 		let mut msg_content_head_len: usize = 0;
@@ -725,6 +718,7 @@ pub trait ProtocolImpl: Send + Sync {
 
 			dst.put_u32((163 + dest_ids.len() * 32 + msg_content_head_len + this_msg_content.len()) as u32);
 			dst.put_u32(self.get_type_id(MsgType::Submit));
+			let seq_id = get_sequence_id(dest_ids.len() as u32);
 			seq_ids.push(seq_id);
 			dst.put_u32(seq_id);
 
