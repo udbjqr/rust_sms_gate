@@ -42,3 +42,6 @@
 
 ### 其他
 - lower.computer.init 网关启动后会发送此消息.希望获取通道\客户等的初始化消息
+
+# 监听端口
+- 编辑confing/smsServer.json文件,设置监听的端口
