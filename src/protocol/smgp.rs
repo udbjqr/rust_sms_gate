@@ -426,6 +426,11 @@ impl ProtocolImpl for Smgp {
 			}
 		};
 
+		let at_time = match json[AT_TIME].as_str() {
+			Some(v) => v,
+			None => "",
+		};
+
 		let service_id = match json[SERVICE_ID].as_str() {
 			Some(v) => v,
 			None => {
@@ -435,11 +440,6 @@ impl ProtocolImpl for Smgp {
 		};
 
 		let valid_time = match json[VALID_TIME].as_str() {
-			Some(v) => v,
-			None => "",
-		};
-
-		let at_time = match json[AT_TIME].as_str() {
 			Some(v) => v,
 			None => "",
 		};
