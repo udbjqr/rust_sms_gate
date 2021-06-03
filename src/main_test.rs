@@ -15,6 +15,23 @@ use std::time::{Instant, Duration};
 use json::JsonValue;
 use tokio::sync::mpsc;
 use sms_gate::protocol::smgp::Smgp;
+use futures::task::SpawnExt;
+
+fn foo(n: usize) {
+	use std::mem::align_of;
+	unsafe {
+		let x = [5u8, 6u8, 7u8, 8u8, 9u8];
+		let ptr = x.as_ptr().add(n) as *const u8;
+		let offset = ptr.align_offset(align_of::<u16>());
+		if offset < x.len() - n - 1 {
+			let u16_ptr = ptr.add(offset) as *const u16;
+			assert_ne!(*u16_ptr, 500);
+		} else {
+			// while the pointer can be aligned via `offset`, it would point
+			// outside the allocation
+		}
+	}
+}
 
 fn main() {
 	simple_logger::SimpleLogger::init(Default::default());
@@ -100,11 +117,10 @@ async fn start_work(framed: &mut Framed<TcpStream, Protocol>, protocol: Protocol
 		};
 
 
-
 	let one_secs = Duration::from_secs(1);
-	let (tx,rx) = mpsc::unbounded_channel();
+	let (tx, rx) = mpsc::unbounded_channel();
 
-	get_runtime().spawn(async move{
+	get_runtime().spawn(async move {
 		let mut count = 0u32;
 		let json = json::object! {
 			msg_content: "cttest",
@@ -119,13 +135,13 @@ async fn start_work(framed: &mut Framed<TcpStream, Protocol>, protocol: Protocol
 		};
 
 		for i in 0..1 {
-			if let Err(e) =	tx.send(json.clone()){
-				println!("发送消息错误:{}",e);
+			if let Err(e) = tx.send(json.clone()) {
+				println!("发送消息错误:{}", e);
 			}
 		};
 	});
 
-	let mut peer = Peer{rx};
+	let mut peer = Peer { rx };
 
 	loop {
 		//根据当前是否已经发满。发送当前是否可用数据。
