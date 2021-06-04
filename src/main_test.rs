@@ -17,39 +17,22 @@ use tokio::sync::mpsc;
 use sms_gate::protocol::smgp::Smgp;
 use futures::task::SpawnExt;
 
-fn foo(n: usize) {
-	use std::mem::align_of;
-	unsafe {
-		let x = [5u8, 6u8, 7u8, 8u8, 9u8];
-		let ptr = x.as_ptr().add(n) as *const u8;
-		let offset = ptr.align_offset(align_of::<u16>());
-		if offset < x.len() - n - 1 {
-			let u16_ptr = ptr.add(offset) as *const u16;
-			assert_ne!(*u16_ptr, 500);
-		} else {
-			// while the pointer can be aligned via `offset`, it would point
-			// outside the allocation
-		}
-	}
-}
-
 fn main() {
 	simple_logger::SimpleLogger::init(Default::default());
+
 	get_runtime().spawn(async move {
-		// let addr = "118.31.45.242:7890".parse().unwrap();
-		let addr = "42.99.16.84:8890".parse().unwrap();
+		let addr = "221.228.32.44:9002".parse().unwrap();
 		let socket = TcpSocket::new_v4().unwrap();
+		println!("连接服务器：{:?}",socket);
 		let stream = socket.connect(addr).await.unwrap();
 
+		println!("连接服务器：{:?}",stream);
 		let mut protocol = SMGP(Smgp::new());
 		let mut framed = Framed::new(stream, protocol.clone());
 
 		let mut login_msg = json::object! {
-				loginName: "100980",
-				password: "0G*&ZWLbhkv1",
-				// gatewayIp: "118.31.45.242:7890",
-				// loginName: "101016",
-				// password: "S6#j7Fgc!CXe",
+				loginName: "101094",
+				password: "aTt1ZIo^Mp^6",
 				protocolVersion: 0x30u32,
 				msg_type: "Connect"
 			};
