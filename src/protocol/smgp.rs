@@ -130,6 +130,14 @@ impl ProtocolImpl for Smgp {
 			}
 		};
 
+		let version = match json[VERSION].as_u8() {
+			Some(v) => v,
+			None => {
+				log::error!("没有version.退出..json:{}", json);
+				return Err(io::Error::new(io::ErrorKind::NotFound, "没有version"));
+			}
+		};
+
 		let time = get_time();
 
 		//固定这个大小。
@@ -142,7 +150,7 @@ impl ProtocolImpl for Smgp {
 		dst.extend_from_slice(self.get_auth(client_id, password, time).as_ref());
 		dst.put_u8(2);//"LoginMode"	1 2:收发消息
 		dst.put_u32(time); //TimeStamp"	4	Integer
-		dst.put_u8(0x13); //ClientVersion  1  Integer
+		dst.put_u8(version); //ClientVersion  1  Integer
 
 		Ok(dst)
 	}
