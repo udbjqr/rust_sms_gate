@@ -339,9 +339,10 @@ impl Channel {
 						let (status, mut result) = self.handle_login(request, true, ip_addr).await;
 						match status {
 							Success => {
-								info!("登录成功。{}", result);
+								info!("match_version{}", result);
 								*framed.codec_mut() = self.protocol.clone();
 								if let Some(msg) = self.protocol.encode_receipt(Success, &mut result) {
+									log::debug!("开始向客户端发送登录成功返回：{:?}",msg);
 									framed.send(msg).await?;
 								}
 								self.need_approve = false;
