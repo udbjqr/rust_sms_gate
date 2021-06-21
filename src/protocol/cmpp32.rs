@@ -33,9 +33,7 @@ impl ProtocolImpl for Cmpp32 {
 		dst.put_u32(json[SEQ_ID].as_u32().unwrap());
 		dst.put_u8(self.get_status_id(&status) as u8);
 
-		let str = json[AUTHENTICATOR].as_str().unwrap_or("").as_bytes();
-
-		dst.extend_from_slice(&str[0..16]);
+		dst.put_u64(json[AUTHENTICATOR].as_u64().unwrap_or(0));
 		dst.put_u8(json[VERSION].as_u8().unwrap());
 
 		Some(dst)
