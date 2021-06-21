@@ -14,25 +14,29 @@ use sms_gate::protocol::names::{ENTITY_ID, MSG_TYPE_STR, STATUS, VERSION};
 use std::time::{Instant, Duration};
 use json::JsonValue;
 use tokio::sync::mpsc;
-use sms_gate::protocol::smgp::Smgp;
+use sms_gate::protocol::smgp::Smgp30;
 use futures::task::SpawnExt;
 
 fn main() {
-	simple_logger::SimpleLogger::init(Default::default());
+	// simple_logger::SimpleLogger::init(Default::default());
+	log4rs::init_file("config/log.yaml", Default::default()).unwrap();
 
 	get_runtime().spawn(async move {
-		let addr = "221.228.32.44:9002".parse().unwrap();
+		// let addr = "221.228.32.44:9002".parse().unwrap();
+		let addr = "118.31.45.242:7890".parse().unwrap();
 		let socket = TcpSocket::new_v4().unwrap();
 		println!("连接服务器：{:?}",socket);
 		let stream = socket.connect(addr).await.unwrap();
 
 		println!("连接服务器：{:?}",stream);
-		let mut protocol = SMGP(Smgp::new());
+		let mut protocol = CMPP48(Cmpp48::new());
 		let mut framed = Framed::new(stream, protocol.clone());
 
 		let mut login_msg = json::object! {
-				loginName: "101094",
-				password: "aTt1ZIo^Mp^6",
+				// loginName: "101094",
+				// password: "aTt1ZIo^Mp^6",
+				loginName: "103996",
+				password: "123321",
 				protocolVersion: 0x30u32,
 				msg_type: "Connect"
 			};
@@ -106,15 +110,15 @@ async fn start_work(framed: &mut Framed<TcpStream, Protocol>, protocol: Protocol
 	get_runtime().spawn(async move {
 		let mut count = 0u32;
 		let json = json::object! {
-			msg_content: "cttest",
+			msg_content: "啊哈哈哈#3#喜喜#1#",
 			serviceId: "99",
-			spId: "10681874",
-			src_id: "10681874991234567",
+			spId: "1068220312345",
+			src_id: "106822031234512333",
 			msg_type:"Submit",
 			dest_ids:[
-				"17346404794"
+				"17779522835"
 			],
-			msg_ids:["042911301994803057760"]
+			msg_ids:["061614401994803057760"]
 		};
 
 		for i in 0..1 {

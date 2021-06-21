@@ -5,7 +5,7 @@ use tokio::time::Instant;
 use crate::get_runtime;
 use tokio::time;
 use crate::protocol::Protocol::SMGP;
-use crate::protocol::smgp::Smgp;
+use crate::protocol::smgp::Smgp30;
 use crate::protocol::ProtocolImpl;
 use crate::protocol::implements::get_time;
 
@@ -37,7 +37,7 @@ fn test_json2() {
 
 #[test]
 fn test_smgpconnect() {
-	let c = Smgp::new();
+	let c = Smgp30::new();
 	let mut json = json::object! {
 		loginName:"103996",
 		password:"123456",

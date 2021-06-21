@@ -14,13 +14,13 @@ use crate::global::ISMG_ID;
 
 ///Sgip协议的处理
 #[derive(Debug, Default)]
-pub struct Smgp {
+pub struct Smgp30 {
 	version: u32,
 	length_codec: LengthDelimitedCodec,
 }
 
 
-impl ProtocolImpl for Smgp {
+impl ProtocolImpl for Smgp30 {
 	fn get_framed(&mut self, buf: &mut BytesMut) -> io::Result<Option<BytesMut>> {
 		self.length_codec.decode(buf)
 	}
@@ -666,16 +666,16 @@ impl ProtocolImpl for Smgp {
 	}
 }
 
-impl Clone for Smgp {
+impl Clone for Smgp30 {
 	fn clone(&self) -> Self {
-		Smgp::new()
+		Smgp30::new()
 	}
 }
 
-impl Smgp {
+impl Smgp30 {
 	pub fn new() -> Self {
-		Smgp {
-			version: 0,
+		Smgp30 {
+			version: 0x30,
 			length_codec: LengthDelimitedCodec::builder()
 				.length_field_offset(0)
 				.length_field_length(4)

@@ -14,7 +14,7 @@ use crate::protocol::names::{MSG_TYPE_U32, MSG_TYPE_STR};
 use tokio_util::codec::{Encoder, Decoder};
 use crate::protocol::cmpp32::Cmpp32;
 use futures::io::Error;
-use crate::protocol::smgp::Smgp;
+use crate::protocol::smgp::Smgp30;
 use crate::protocol::Protocol::SMGP;
 use crate::protocol::smpp::Smpp;
 pub use crate::protocol::implements::ProtocolImpl;
@@ -33,7 +33,7 @@ mod smpp;
 pub enum Protocol {
 	CMPP48(Cmpp48),
 	CMPP32(Cmpp32),
-	SMGP(Smgp),
+	SMGP(Smgp30),
 	SGIP(Sgip),
 	SMPP(Smpp),
 	None,
@@ -44,7 +44,7 @@ impl From<&str> for Protocol {
 		//指定某一个协议进行初始化的操作.
 		match name[0..4].to_uppercase().as_str() {
 			"CMPP" => Protocol::CMPP48(Cmpp48::new()),
-			"SMGP" => Protocol::SMGP(Smgp::new()),
+			"SMGP" => Protocol::SMGP(Smgp30::new()),
 			"SGIP" => Protocol::SGIP(Sgip::new()),
 			"SMPP" => Protocol::SMPP(Smpp::new()),
 			_ => Protocol::None
@@ -78,7 +78,7 @@ impl Protocol {
 			("CMPP", 48) => Protocol::CMPP48(Cmpp48::new()),
 			("CMPP", 32) => Protocol::CMPP32(Cmpp32::new()),
 			("SGIP", _) => Protocol::SGIP(Sgip::new()),
-			("SMGP", _) => Protocol::SMGP(Smgp::new()),
+			("SMGP", _) => Protocol::SMGP(Smgp30::new()),
 			("SMPP", _) => Protocol::SMPP(Smpp::new()),
 			_ => {
 				log::error!("未了解的协议名称和版本号.name:{},version:{}", name, version);
