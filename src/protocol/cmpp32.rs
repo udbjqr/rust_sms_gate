@@ -2,7 +2,7 @@ use tokio_util::codec::{LengthDelimitedCodec, Decoder};
 use crate::protocol::implements::{ProtocolImpl, create_cmpp_msg_id, fill_bytes_zero, load_utf8_string, decode_msg_content, cmpp_msg_id_u64_to_str, cmpp_msg_id_str_to_u64};
 use json::JsonValue;
 use bytes::{BytesMut, BufMut, Buf};
-use crate::protocol::names::{AUTHENTICATOR, SEQ_ID, VERSION, MSG_ID, SERVICE_ID, STATE, SUBMIT_TIME, DONE_TIME, SMSC_SEQUENCE, SRC_ID, DEST_ID, SEQ_IDS, MSG_CONTENT, SP_ID, VALID_TIME, AT_TIME, DEST_IDS, MSG_TYPE_U32, RESULT, MSG_FMT, IS_REPORT, MSG_IDS};
+use crate::protocol::names::{SEQ_ID, VERSION, MSG_ID, SERVICE_ID, STATE, SUBMIT_TIME, DONE_TIME, SMSC_SEQUENCE, SRC_ID, DEST_ID, SEQ_IDS, MSG_CONTENT, SP_ID, VALID_TIME, AT_TIME, DEST_IDS, MSG_TYPE_U32, RESULT, MSG_FMT, IS_REPORT, MSG_IDS};
 use crate::protocol::{MsgType, SmsStatus};
 use std::io::Error;
 use crate::protocol::msg_type::MsgType::SubmitResp;
@@ -33,9 +33,7 @@ impl ProtocolImpl for Cmpp32 {
 		dst.put_u32(json[SEQ_ID].as_u32().unwrap());
 		dst.put_u8(self.get_status_id(&status) as u8);
 
-		let str = "0000000000000000".as_bytes();
-
-		dst.extend_from_slice(&str[0..16]);
+		dst.extend_from_slice(&FILL_ZERO[0..16]);
 		dst.put_u8(json[VERSION].as_u8().unwrap());
 
 		Some(dst)
@@ -169,9 +167,9 @@ impl ProtocolImpl for Cmpp32 {
 
 
 		//状态报告长度固定
-		let mut dst = BytesMut::with_capacity(133);
+		let mut dst = BytesMut::with_capacity(145);
 
-		dst.put_u32(133);
+		dst.put_u32(145);
 		dst.put_u32(self.get_type_id(MsgType::Deliver));
 		let mut seq_ids = Vec::with_capacity(1);
 		let seq_id = get_sequence_id(1);
