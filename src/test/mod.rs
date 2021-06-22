@@ -2,7 +2,7 @@
 
 
 use tokio::time::Instant;
-use crate::get_runtime;
+use crate::{get_runtime, protocol::cmpp32::Cmpp32};
 use tokio::time;
 use crate::protocol::Protocol::SMGP;
 use crate::protocol::smgp::Smgp30;
@@ -52,6 +52,24 @@ fn test_smgpconnect() {
 
 #[test]
 fn test_test() {
-	println!("{}",get_time());
+	simple_logger::SimpleLogger::init(Default::default());
+
+	use crate::protocol::implements::{ cmpp_msg_id_u64_to_str, cmpp_msg_id_str_to_u64};
+	use bytes::{BytesMut, Buf, Bytes, BufMut};
+	use json::JsonValue;
+	use crate::protocol::names::{SEQ_ID, VERSION, MSG_ID, SERVICE_ID, STATE, SUBMIT_TIME, DONE_TIME, SMSC_SEQUENCE, SRC_ID, DEST_ID, SEQ_IDS, MSG_CONTENT, SP_ID, VALID_TIME, AT_TIME, DEST_IDS, MSG_TYPE_U32, RESULT, MSG_FMT, IS_REPORT, MSG_IDS};
+	use crate::protocol::{MsgType, SmsStatus};
+
+	let mut cmpp = Cmpp32::new();
+	let mut json = JsonValue::new_object();
+
+	json[SEQ_ID] = 0x42600191u32.into();
+	json[MSG_ID] = "062215043035531600399".into();
+
+	let mut buf = cmpp.encode_deliver_resp(SmsStatus::Success,&mut json).unwrap();
+	println!("{:X}",buf);
+	// println!("{}",cmpp.decode_read_msg(&mut buf).unwrap().unwrap());
+
+	println!("{}",cmpp_msg_id_u64_to_str(0x6B3C47807F7D04B3u64));
 }
 

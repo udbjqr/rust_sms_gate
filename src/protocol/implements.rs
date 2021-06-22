@@ -11,7 +11,7 @@ use crate::global::FILL_ZERO;
 use crate::protocol::msg_type::MsgType::{Connect, SubmitResp};
 use tokio::io::Error;
 use crate::protocol::msg_type::SmsStatus;
-use crate::protocol::names::{SEQ_ID, AUTHENTICATOR, VERSION, STATUS, MSG_TYPE_U32, MSG_CONTENT, MSG_ID, SERVICE_ID, TP_UDHI, SP_ID, VALID_TIME, AT_TIME, SRC_ID, MSG_FMT, DEST_IDS, RESULT, DEST_ID, STATE, SUBMIT_TIME, DONE_TIME, SMSC_SEQUENCE, IS_REPORT, MSG_TYPE_STR, LONG_SMS_TOTAL, LONG_SMS_NOW_NUMBER, SEQ_IDS, LOGIN_NAME, PASSWORD, TIMESTAMP, MSG_IDS};
+use crate::protocol::names::{SEQ_ID, PASSAGE_MSG_ID, AUTHENTICATOR, VERSION, STATUS, MSG_TYPE_U32, MSG_CONTENT, MSG_ID, SERVICE_ID, TP_UDHI, SP_ID, VALID_TIME, AT_TIME, SRC_ID, MSG_FMT, DEST_IDS, RESULT, DEST_ID, STATE, SUBMIT_TIME, DONE_TIME, SMSC_SEQUENCE, IS_REPORT, MSG_TYPE_STR, LONG_SMS_TOTAL, LONG_SMS_NOW_NUMBER, SEQ_IDS, LOGIN_NAME, PASSWORD, TIMESTAMP, MSG_IDS};
 use crate::protocol::MsgType;
 use std::ops::Add;
 
@@ -828,7 +828,7 @@ pub trait ProtocolImpl: Send + Sync {
 		} else {
 			buf.advance(1); //Msg_Length 1
 			json[IS_REPORT] = true.into(); //状态报告增加.
-			json[MSG_ID] = cmpp_msg_id_u64_to_str(buf.get_u64()).into(); // Msg_Id
+			json[PASSAGE_MSG_ID] = cmpp_msg_id_u64_to_str(buf.get_u64()).into(); // PASSAGE_MSG_ID
 			json[STATE] = load_utf8_string(buf, 7).into(); // Stat
 			json[SUBMIT_TIME] = load_utf8_string(buf, 10).into(); // Submit_time
 			json[DONE_TIME] = load_utf8_string(buf, 10).into(); // Done_time

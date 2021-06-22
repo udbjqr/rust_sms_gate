@@ -180,8 +180,9 @@ async fn handle_from_channel_rx(msg: Option<JsonValue>, context: &mut EntityRunC
 				Some(v) => {
 					match (v.into(), msg[WAIT_RECEIPT].as_bool()) {
 						(MsgType::SubmitResp, _) => {
-							log::trace!("收到回执..移除缓存:{}", &get_key(&msg));
 							if let Some(mut source) = context.wait_receipt_map.remove(&get_key(&msg)) {
+								log::trace!("收到回执..移除缓存:{}", source);
+
 								msg[ACCOUNT_MSG_ID] = source.remove(ACCOUNT_MSG_ID);
 								msg[PASSAGE_MSG_ID] = msg.remove(MSG_ID);
 							}
@@ -194,6 +195,7 @@ async fn handle_from_channel_rx(msg: Option<JsonValue>, context: &mut EntityRunC
 							log::trace!("缓存消息.等待回执..消息:{}", msg);
 							insert_into_wait_receipt(&mut context.wait_receipt_map, msg);
 						}
+
 						(MsgType::Report, Some(true)) => {
 							log::trace!("缓存状态报告消息.等待回执..消息:{}", msg);
 							if msg[SEQ_IDS].is_array() && !msg[SEQ_IDS].is_empty() {
@@ -206,15 +208,19 @@ async fn handle_from_channel_rx(msg: Option<JsonValue>, context: &mut EntityRunC
 								log::error!("insert_into_wait_receipt出现错误。当前未取到SEQ_IDS...json:{}", msg);
 							}
 						}
+
 						(MsgType::ReportResp, _) => {
 							log::trace!("收到回执..移除缓存:{}", &get_key(&msg));
+
 							context.wait_receipt_map.remove(&get_key(&msg));
 							send_to_queue!(&context.to_queue, TOPIC_TO_B_REPORT_RESP, "", msg);
 						}
+
 						(MsgType::DeliverResp, _) => {
-							log::trace!("收到回执..移除缓存:{}", &get_key(&msg));
-							if let Some(_) = context.wait_receipt_map.remove(&get_key(&msg)) {
-								msg[ACCOUNT_MSG_ID] = msg.remove(MSG_ID);
+							if let Some(mut item) = context.wait_receipt_map.remove(&get_key(&msg)) {
+								log::trace!("收到回执..移除缓存:{}", item);
+
+								msg[ACCOUNT_MSG_ID] = item.remove(MSG_ID);
 							}
 
 							send_to_queue!(&context.to_queue, TOPIC_TO_B_DELIVER_RESP, "", msg);
@@ -222,6 +228,10 @@ async fn handle_from_channel_rx(msg: Option<JsonValue>, context: &mut EntityRunC
 						//收到上传消息
 						(MsgType::Report, Some(false)) |
 						(MsgType::Report, None) => {
+							if !msg[PASSAGE_MSG_ID].is_empty() {
+								msg[MSG_ID] = msg.remove(PASSAGE_MSG_ID);
+							}
+
 							send_to_queue!(&context.to_queue, TOPIC_TO_B_REPORT, "", msg);
 						}
 						//收到上传消息
