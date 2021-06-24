@@ -265,8 +265,8 @@ impl ProtocolImpl for Cmpp32 {
 		};
 
 		//长短信的话,一次性生成多条记录
-		//73是除开内容\发送号码之后所有长度加在一起
-		let total_len = sms_len * (73 + msg_content_head_len) + msg_content_len;
+		//85是除开内容\发送号码之后所有长度加在一起
+		let total_len = sms_len * (85 + msg_content_head_len) + msg_content_len;
 
 		let mut dst = BytesMut::with_capacity(total_len);
 		let mut seq_ids = Vec::with_capacity(sms_len);
@@ -278,7 +278,7 @@ impl ProtocolImpl for Cmpp32 {
 				&msg_content_code[(i * one_content_len)..((i + 1) * one_content_len)]
 			};
 
-			dst.put_u32((73 + msg_content_head_len + this_msg_content.len()) as u32);
+			dst.put_u32((85 + msg_content_head_len + this_msg_content.len()) as u32);
 			dst.put_u32(self.get_type_id(MsgType::Deliver));
 			let seq_id = get_sequence_id(1);
 			seq_ids.push(seq_id);
@@ -289,7 +289,7 @@ impl ProtocolImpl for Cmpp32 {
 			fill_bytes_zero(&mut dst, service_id, 10);//service_id 10
 			dst.put_u8(0); //TP_pid 1
 			dst.put_u8(if sms_len == 1 { 0 } else { 1 }); //tp_udhi 1
-			dst.put_u8(8); //Msg_Fmt 1
+			dst.put_u8(json[MSG_FMT].as_u8().unwrap_or(15)); //Msg_Fmt 1
 			fill_bytes_zero(&mut dst, src_id, 21);  //src_id 21
 			dst.put_u8(0); //Registered_Delivery 1 0 非状态报告
 			dst.put_u8(this_msg_content.len() as u8 + msg_content_head_len as u8); //Msg_Length

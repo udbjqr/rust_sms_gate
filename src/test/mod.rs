@@ -61,15 +61,23 @@ fn test_test() {
 	use crate::protocol::{MsgType, SmsStatus};
 
 	let mut cmpp = Cmpp32::new();
-	let mut json = JsonValue::new_object();
+	let mut json = json::object!{
+		tp_udhi:0,
+		msg_fmt:15,
+		src_id:"17779522835",
+		msg_content:"上行测试",
+		passage_id:999,
+		msg_type:"Deliver",
+		id:20,
+		dest_id:"1068220312345123",
+		msg_id:"062323000003263749403",
+		manager_type:"send",
+		entity_id:20,
+		spId:"103996",
+		serviceId:"15664"
+	};
 
-	json[SEQ_ID] = 0x42600191u32.into();
-	json[MSG_ID] = "062215043035531600399".into();
-
-	let mut buf = cmpp.encode_deliver_resp(SmsStatus::Success,&mut json).unwrap();
-	println!("{:X}",buf);
-	// println!("{}",cmpp.decode_read_msg(&mut buf).unwrap().unwrap());
-
-	println!("{}",cmpp_msg_id_u64_to_str(0x6B3C47807F7D04B3u64));
+	cmpp.encode_deliver(&mut json);
+	println!("{:?}",json);
 }
 

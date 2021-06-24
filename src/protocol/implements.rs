@@ -597,7 +597,7 @@ pub trait ProtocolImpl: Send + Sync {
 			fill_bytes_zero(&mut dst, service_id, 10);//service_id 10
 			dst.put_u8(0); //TP_pid 1
 			dst.put_u8(if sms_len == 1 { 0 } else { 1 }); //tp_udhi 1
-			dst.put_u8(8); //Msg_Fmt 1
+			dst.put_u8(json[MSG_FMT].as_u8().unwrap_or(15)); //Msg_Fmt 1
 			fill_bytes_zero(&mut dst, src_id, 32);  //src_id 32
 			dst.put_u8(0); //Src_terminal_type 1
 			dst.put_u8(0); //Registered_Delivery 1 0 非状态报告

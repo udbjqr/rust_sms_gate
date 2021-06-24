@@ -189,15 +189,15 @@ async fn handle_from_channel_rx(msg: Option<JsonValue>, context: &mut EntityRunC
 
 							send_to_queue!(&context.to_queue, TOPIC_TO_B_SUBMIT_RESP, "", msg);
 						}
-						//需要等待回执
-						(MsgType::Deliver, Some(true)) |
+						//发送需要等待回执
 						(MsgType::Submit, Some(true)) => {
 							log::trace!("缓存消息.等待回执..消息:{}", msg);
 							insert_into_wait_receipt(&mut context.wait_receipt_map, msg);
 						}
-
+						//状态报告需要等待回执
+						(MsgType::Deliver, Some(true)) |
 						(MsgType::Report, Some(true)) => {
-							log::trace!("缓存状态报告消息.等待回执..消息:{}", msg);
+							log::trace!("缓存上行或状态报告消息.等待回执..消息:{}", msg);
 							if msg[SEQ_IDS].is_array() && !msg[SEQ_IDS].is_empty() {
 								if let Some(seq_id) = msg[SEQ_IDS][0].as_u64() {
 									context.wait_receipt_map.insert(seq_id, msg);
@@ -225,7 +225,6 @@ async fn handle_from_channel_rx(msg: Option<JsonValue>, context: &mut EntityRunC
 
 							send_to_queue!(&context.to_queue, TOPIC_TO_B_DELIVER_RESP, "", msg);
 						}
-						//收到上传消息
 						(MsgType::Report, Some(false)) |
 						(MsgType::Report, None) => {
 							if !msg[PASSAGE_MSG_ID].is_empty() {
