@@ -188,7 +188,7 @@ impl ProtocolImpl for Sgip {
 			}
 		};
 
-		let node_id = match json[SP_ID].as_u32() {
+		let _node_id = match json[SP_ID].as_u32() {
 			Some(v) => v,
 			None => {
 				log::error!("没有node_id.退出..json:{}", json);
@@ -216,7 +216,7 @@ impl ProtocolImpl for Sgip {
 			}
 		};
 
-		let node_id = match json[SP_ID].as_u32() {
+		let _node_id = match json[SP_ID].as_u32() {
 			Some(v) => v,
 			None => {
 				log::error!("没有node_id.退出..json:{}", json);
@@ -560,7 +560,7 @@ impl ProtocolImpl for Sgip {
 			dst.put_u32((143 + dest_ids.len() * 21 + msg_content_head_len + this_msg_content.len()) as u32);
 			dst.put_u32(self.get_type_id(MsgType::Submit));
 			dst.put_u32(node_id);
-			let mut seq_id = (get_time() as u64 )<< 32 | (get_sequence_id(dest_ids.len() as u32)) as u64;
+			let seq_id = (get_time() as u64 )<< 32 | (get_sequence_id(dest_ids.len() as u32)) as u64;
 			dst.put_u64(seq_id);
 
 			seq_ids.push(seq_id);
