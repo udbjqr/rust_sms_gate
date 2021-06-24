@@ -1,3 +1,5 @@
+#[allow(unused)]
+
 use bytes::{BytesMut, BufMut, Buf};
 use json::JsonValue;
 use tokio::io;
