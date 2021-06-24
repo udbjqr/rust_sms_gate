@@ -7,10 +7,10 @@ use json::JsonValue;
 use crate::protocol::names::{LOGIN_NAME, PASSWORD, VERSION, MSG_TYPE_U32, SEQ_ID, AUTHENTICATOR, MSG_CONTENT, SERVICE_ID, VALID_TIME, AT_TIME, SRC_ID, DEST_IDS, SEQ_IDS, MSG_FMT, MSG_ID, RESULT, DEST_ID, SMGP_RECEIVE_TIME, SUBMIT_TIME, DONE_TIME, STATE, ERROR_CODE, TEXT, TIMESTAMP, MSG_IDS};
 use crate::protocol::msg_type::MsgType::{Connect, SubmitResp};
 use std::io::Error;
-use encoding::all::GBK;
-use encoding::{EncoderTrap, Encoding};
 use crate::global::{get_sequence_id, FILL_ZERO};
 use crate::global::ISMG_ID;
+
+use super::implements::encode_msg_content;
 
 ///Sgip协议的处理
 #[derive(Debug, Default)]
@@ -315,7 +315,7 @@ impl ProtocolImpl for Smgp30 {
 		};
 
 		//编码以后的消息内容
-		let msg_content_code = match GBK.encode(msg_content, EncoderTrap::Strict) {
+		let msg_content_code = match encode_msg_content(json[MSG_FMT].as_u8().unwrap_or(15),msg_content) {
 			Ok(v) => v,
 			Err(e) => {
 				log::error!("字符串内容解码出现错误..json:{}.e:{}", json, e);
@@ -426,7 +426,7 @@ impl ProtocolImpl for Smgp30 {
 		};
 
 		//编码以后的消息内容
-		let msg_content_code = match GBK.encode(msg_content, EncoderTrap::Strict) {
+		let msg_content_code = match encode_msg_content(json[MSG_FMT].as_u8().unwrap_or(15),msg_content) {
 			Ok(v) => v,
 			Err(e) => {
 				log::error!("字符串内容解码出现错误..json:{}.e:{}", json, e);

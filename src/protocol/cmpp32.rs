@@ -8,9 +8,9 @@ use std::io::Error;
 use crate::protocol::msg_type::MsgType::SubmitResp;
 use tokio::io;
 use crate::global::get_sequence_id;
-use encoding::all::UTF_16BE;
-use encoding::{Encoding, EncoderTrap};
 use crate::global::FILL_ZERO;
+
+use super::implements::encode_msg_content;
 
 ///CMPP协议2.0的处理
 #[derive(Debug, Default)]
@@ -216,7 +216,7 @@ impl ProtocolImpl for Cmpp32 {
 		};
 
 		//编码以后的消息内容
-		let msg_content_code = match UTF_16BE.encode(msg_content, EncoderTrap::Strict) {
+		let msg_content_code = match encode_msg_content(json[MSG_FMT].as_u8().unwrap_or(8),msg_content) {
 			Ok(v) => v,
 			Err(e) => {
 				log::error!("字符串内容解码出现错误..json:{}.e:{}", json, e);
@@ -325,7 +325,7 @@ impl ProtocolImpl for Cmpp32 {
 		};
 
 		//编码以后的消息内容
-		let msg_content_code = match UTF_16BE.encode(msg_content, EncoderTrap::Strict) {
+		let msg_content_code = match encode_msg_content(json[MSG_FMT].as_u8().unwrap_or(8),msg_content) {
 			Ok(v) => v,
 			Err(e) => {
 				log::error!("字符串内容解码出现错误..json:{}.e:{}", json, e);

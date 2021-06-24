@@ -1,23 +1,18 @@
-#![allow(unused)]
-
 use bytes::{BytesMut, BufMut, Buf};
 use json::JsonValue;
 use tokio::io;
 use tokio::io::Error;
-use tokio_util::codec::{Decoder, Encoder, LengthDelimitedCodec};
+use tokio_util::codec::{Decoder, LengthDelimitedCodec};
 
-use crate::protocol::{SmsStatus, Protocol};
+use crate::protocol::{SmsStatus};
 use crate::protocol::msg_type::MsgType;
 use crate::protocol::implements::{ProtocolImpl, fill_bytes_zero, copy_to_bytes, get_time, load_utf8_string, decode_msg_content};
 use crate::protocol::names::{LOGIN_NAME, PASSWORD,  MSG_TYPE_U32, SEQ_ID, STATUS, MSG_CONTENT, SERVICE_ID, SP_ID, SRC_ID, DEST_IDS, SEQ_IDS, MSG_FMT, DEST_ID, STATE, RESP_NODE_ID, ERROR_CODE, RESP_SEQ_ID};
-use chrono::{DateTime, Local, Datelike, Timelike};
 use crate::global::get_sequence_id;
 use crate::protocol::msg_type::MsgType::{Connect, SubmitResp};
-use encoding::all::UTF_16BE;
-use encoding::{EncoderTrap, Encoding};
 use crate::global::FILL_ZERO;
-use std::sync::atomic::Ordering::SeqCst;
-use std::ops::Deref;
+
+use super::implements::encode_msg_content;
 
 ///Sgip协议的处理
 #[derive(Debug, Default)]
@@ -386,14 +381,14 @@ impl ProtocolImpl for Sgip {
 		};
 
 		//编码以后的消息内容
-		let msg_content_code = match UTF_16BE.encode(msg_content, EncoderTrap::Strict) {
+		let msg_content_code = match encode_msg_content(json[MSG_FMT].as_u8().unwrap_or(8),msg_content) {
 			Ok(v) => v,
 			Err(e) => {
 				log::error!("字符串内容解码出现错误..json:{}.e:{}", json, e);
 				return Err(io::Error::new(io::ErrorKind::Other, "字符串内容解码出现错误"));
 			}
 		};
-
+		
 		let src_id = match json[SRC_ID].as_str() {
 			Some(v) => v,
 			None => {
@@ -479,13 +474,13 @@ impl ProtocolImpl for Sgip {
 		};
 
 		//编码以后的消息内容
-		let msg_content_code = match UTF_16BE.encode(msg_content, EncoderTrap::Strict) {
+		let msg_content_code = match encode_msg_content(json[MSG_FMT].as_u8().unwrap_or(8),msg_content) {
 			Ok(v) => v,
 			Err(e) => {
 				log::error!("字符串内容解码出现错误..json:{}.e:{}", json, e);
 				return Err(io::Error::new(io::ErrorKind::Other, "字符串内容解码出现错误"));
 			}
-		};
+		};		
 
 		let service_id = match json[SERVICE_ID].as_str() {
 			Some(v) => v,

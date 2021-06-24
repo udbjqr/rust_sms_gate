@@ -524,7 +524,7 @@ pub trait ProtocolImpl: Send + Sync {
 		};
 
 		//编码以后的消息内容
-		let msg_content_code = match UTF_16BE.encode(msg_content, EncoderTrap::Strict) {
+		let msg_content_code = match encode_msg_content(json[MSG_FMT].as_u8().unwrap_or(8),msg_content) {
 			Ok(v) => v,
 			Err(e) => {
 				log::error!("字符串内容解码出现错误..json:{}.e:{}", json, e);
@@ -628,7 +628,7 @@ pub trait ProtocolImpl: Send + Sync {
 		};
 
 		//编码以后的消息内容
-		let msg_content_code = match UTF_16BE.encode(msg_content, EncoderTrap::Strict) {
+		let msg_content_code = match encode_msg_content(json[MSG_FMT].as_u8().unwrap_or(8),msg_content) {
 			Ok(v) => v,
 			Err(e) => {
 				log::error!("字符串内容解码出现错误..json:{}.e:{}", json, e);
@@ -1044,6 +1044,29 @@ pub fn create_cmpp_msg_id(len: u32) -> u64 {
 	result = result << 22 | *ISMG_ID as u64;
 
 	result << 16 | (get_sequence_id(len) & 0xffff) as u64
+}
+
+
+///处理短信内容的通用方法.msg_content..
+pub fn encode_msg_content(msg_fmt: u8,msg_content: &str) -> Result<Vec<u8>, Error> {
+
+	//根据字符集转换.
+	match msg_fmt {
+		8 => match UTF_16BE.encode(msg_content, EncoderTrap::Strict) {
+			Ok(v) => Ok(v),
+			Err(e) => Err(io::Error::new(io::ErrorKind::InvalidInput,e))
+		}
+		15 => match GBK.encode(msg_content, EncoderTrap::Strict) {
+			Ok(v) => Ok(v),
+			Err(e) =>  Err(io::Error::new(io::ErrorKind::InvalidInput,e))
+		}
+		0 => Ok(msg_content.as_bytes().to_owned()),
+		_ => {
+			log::warn!("未处理的字符集类型.跳过.msg_fmt:{}", msg_fmt);
+			Err(io::Error::new(io::ErrorKind::NotFound,"错误的输入参数。"))
+		}
+	}
+	
 }
 
 ///处理短信内容的通用方法.msg_content..
