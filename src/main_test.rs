@@ -7,7 +7,7 @@ use sms_gate::get_runtime;
 use tokio_util::codec::Framed;
 use sms_gate::protocol::Protocol::{CMPP32, CMPP48, SMGP};
 use sms_gate::protocol::cmpp32::Cmpp32;
-use sms_gate::protocol::{Cmpp48, ProtocolImpl, MsgType, SmsStatus, Protocol};
+use sms_gate::protocol::{Cmpp48,Sgip, ProtocolImpl, MsgType, SmsStatus, Protocol};
 use futures::{SinkExt, StreamExt};
 use tokio::io;
 use sms_gate::protocol::names::{ENTITY_ID, MSG_TYPE_STR, STATUS, VERSION};
@@ -18,26 +18,27 @@ use sms_gate::protocol::smgp::Smgp30;
 use futures::task::SpawnExt;
 
 fn main() {
-	// simple_logger::SimpleLogger::init(Default::default());
-	log4rs::init_file("config/log.yaml", Default::default()).unwrap();
+	simple_logger::SimpleLogger::init(Default::default());
+	// log4rs::init_file("config/log.yaml", Default::default()).unwrap();
 
 	get_runtime().spawn(async move {
 		// let addr = "221.228.32.44:9002".parse().unwrap();
-		let addr = "118.31.45.242:7890".parse().unwrap();
+		let addr = "219.146.23.81:5020".parse().unwrap();
 		let socket = TcpSocket::new_v4().unwrap();
 		println!("连接服务器：{:?}",socket);
 		let stream = socket.connect(addr).await.unwrap();
 
 		println!("连接服务器：{:?}",stream);
-		let mut protocol = CMPP48(Cmpp48::new());
+		let mut protocol = Protocol::SGIP(Sgip::new());
 		let mut framed = Framed::new(stream, protocol.clone());
 
 		let mut login_msg = json::object! {
 				// loginName: "101094",
 				// password: "aTt1ZIo^Mp^6",
-				loginName: "103996",
-				password: "123321",
-				protocolVersion: 0x30u32,
+				loginName: "101016",
+				spId:106902,
+				password: "S6#j7Fgc!CXe",
+				protocolVersion: 0x12u32,
 				msg_type: "Connect"
 			};
 
@@ -111,12 +112,12 @@ async fn start_work(framed: &mut Framed<TcpStream, Protocol>, protocol: Protocol
 		let mut count = 0u32;
 		let json = json::object! {
 			msg_content: "啊哈哈哈#3#喜喜#1#",
-			serviceId: "99",
-			spId: "1068220312345",
-			src_id: "106822031234512333",
+			serviceId: "44444",
+			spId: 106902,
+			src_id: "1069020110111111111",
 			msg_type:"Submit",
 			dest_ids:[
-				"17779522835"
+				"18179156296"
 			],
 			msg_ids:["061614401994803057760"]
 		};

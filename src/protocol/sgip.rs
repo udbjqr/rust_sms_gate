@@ -492,8 +492,8 @@ impl ProtocolImpl for Sgip {
 			}
 		};
 
-		let corp_id = match json[SP_ID].as_str() {
-			Some(v) => v,
+		let corp_id:String = match json[SP_ID].as_u32() {
+			Some(v) => v.to_string(),
 			None => {
 				log::error!("没有sp_id.退出..json:{}", json);
 				return Err(io::Error::new(io::ErrorKind::NotFound, "没有sp_id"));
