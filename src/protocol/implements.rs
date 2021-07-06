@@ -917,7 +917,7 @@ pub fn load_utf8_string(buf: &mut BytesMut, len: usize) -> String {
 
 ///读一个长度字串.做一个异常的保护.
 pub fn copy_to_bytes(buf: &mut BytesMut, len: usize) -> Bytes {
-	if buf.len() > len {
+	if buf.len() >= len {
 		buf.split_to(len).freeze()
 	} else {
 		log::error!("得到消息出现错误.消息没有足够长度.可用长度:{}.现有长度{}", buf.len(), len);
