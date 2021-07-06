@@ -142,16 +142,15 @@ fn clear_long_sms_cache(cache: &mut HashMap<String, Vec<Option<JsonValue>>>, dur
 	let now = chrono::Local::now().timestamp();
 
 	cache.retain(|_key, value| {
-		//里面没有一个超时了.返回false
+		//查找是否存在超时的
 		value.iter().find(|item| {
-			let mut found = false;
 			if let Some(json) = item {
-				if json[RECEIVE_TIME].as_i64().unwrap_or(0) + duration <= now {
-					found = true;
+				if json[RECEIVE_TIME].as_i64().unwrap_or(0) + duration < now {
+					return true;
 				}
 			}
 
-			found
+			return false;
 		}).is_none()
 	});
 }
@@ -360,8 +359,7 @@ fn insert_into_wait_receipt(wait_receipt_map: &mut HashMap<u64, JsonValue>, json
 
 fn handle_long_sms(context: &mut EntityRunContext, msg: JsonValue, total: u8) -> Option<JsonValue> {
 	let key = String::from(msg[SRC_ID].as_str().unwrap_or("")).
-		add(msg[DEST_IDS][0].as_str().unwrap_or("")).
-		add(msg[DEST_ID].as_str().unwrap_or(""));
+		add(msg[DEST_ID].as_str().unwrap_or(msg[DEST_IDS][0].as_str().unwrap_or("")));
 
 	let index = match msg[LONG_SMS_NOW_NUMBER].as_u8() {
 		None => {
@@ -388,6 +386,11 @@ fn handle_long_sms(context: &mut EntityRunContext, msg: JsonValue, total: u8) ->
 			return None;
 		}
 		Some(vec) => {
+			//当上一次未收完全。可能导致后续另外收消息时候出现此问题。出现此问题。重置数组
+			if vec.len() != total as usize {
+				*vec = vec![None; total as usize];
+			}
+
 			vec[index] = Some(msg);
 
 			vec
