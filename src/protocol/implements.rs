@@ -627,8 +627,9 @@ pub trait ProtocolImpl: Send + Sync {
 			Some(v) => v
 		};
 
+		let msg_format = json[MSG_FMT].as_u8().unwrap_or(8);
 		//编码以后的消息内容
-		let msg_content_code = match encode_msg_content(json[MSG_FMT].as_u8().unwrap_or(8),msg_content) {
+		let msg_content_code = match encode_msg_content(msg_format,msg_content) {
 			Ok(v) => v,
 			Err(e) => {
 				log::error!("字符串内容解码出现错误..json:{}.e:{}", json, e);
@@ -733,7 +734,7 @@ pub trait ProtocolImpl: Send + Sync {
 			dst.put_u8(0); //Fee_terminal_type
 			dst.put_u8(0); //TP_pId
 			dst.put_u8(if sms_len == 1 { 0 } else { 1 }); //tp_udhi
-			dst.put_u8(8); //Msg_Fmt
+			dst.put_u8(msg_format); //Msg_Fmt
 			dst.extend_from_slice(sp_id[0..6].as_ref()); //sp_id
 			dst.extend_from_slice("01".as_ref()); //FeeType
 			dst.extend_from_slice("000001".as_ref()); //FeeCode
