@@ -521,6 +521,7 @@ impl ProtocolImpl for Smgp30 {
 			dst.put_u8(2); //Priority
 			fill_bytes_zero(&mut dst, service_id, 10);//Service_Id
 			dst.extend_from_slice("00".as_bytes());//FeeType
+			dst.extend_from_slice("000000".as_bytes());//FeeCode
 			dst.extend_from_slice("000000".as_bytes());//FixedFee
 			dst.put_u8(15); //MsgFormat
 			fill_bytes_zero(&mut dst, valid_time, 17);  //valid_time

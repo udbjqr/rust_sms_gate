@@ -23,13 +23,13 @@ fn main() {
 
 	get_runtime().spawn(async move {
 		// let addr = "221.228.32.44:9002".parse().unwrap();
-		let addr = "219.146.23.81:5020".parse().unwrap();
+		let addr = "150.139.139.130:5020".parse().unwrap();
 		let socket = TcpSocket::new_v4().unwrap();
 		println!("连接服务器：{:?}",socket);
 		let stream = socket.connect(addr).await.unwrap();
 
 		println!("连接服务器：{:?}",stream);
-		let mut protocol = Protocol::SGIP(Sgip::new());
+		let mut protocol = Protocol::SMGP(Smgp30::new());
 		let mut framed = Framed::new(stream, protocol.clone());
 
 		let mut login_msg = json::object! {
@@ -111,10 +111,10 @@ async fn start_work(framed: &mut Framed<TcpStream, Protocol>, protocol: Protocol
 	get_runtime().spawn(async move {
 		let mut count = 0u32;
 		let json = json::object! {
-			msg_content: "啊哈哈哈#3#喜喜#1#",
-			serviceId: "44444",
-			spId: 106902,
-			src_id: "1069020110111111111",
+			msg_content: "【睦霖集团】验证码7232，您正在注册成为新用户，感谢您的支持！",
+			serviceId: "10683074",
+			spId: 10683074,
+			src_id: "1068307411111111",
 			msg_type:"Submit",
 			dest_ids:[
 				"18179156296"
