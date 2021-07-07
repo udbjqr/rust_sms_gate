@@ -509,7 +509,7 @@ pub trait ProtocolImpl: Send + Sync {
 
 	fn encode_deliver(&self, json: &mut JsonValue) -> Result<BytesMut, Error> {
 		//进行一下检测
-		if !json[MSG_ID].is_array() {
+		if json[MSG_ID].as_str().is_none() {
 			log::error!("没有msg_id.退出..json:{}", json);
 			return Err(io::Error::new(io::ErrorKind::NotFound, "没有msg_id"));
 		};
