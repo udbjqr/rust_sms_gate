@@ -392,7 +392,7 @@ impl ProtocolImpl for Smgp30 {
 			dst.extend_from_slice(&this_msg_content[..]); //Msg_Content
 			dst.extend_from_slice(&FILL_ZERO[0..8]); //Reserve
 
-			if !tlvs.is_empty() { self.coder_tlv(&mut dst, &tlvs); }
+			if !tlvs.is_empty() { self.coder_tlv(&mut dst, &tlvs,i + 1); }
 		}
 
 		json[SEQ_IDS] = seq_ids.into();
@@ -478,9 +478,11 @@ impl ProtocolImpl for Smgp30 {
 			one_content_len = one_content_len - 6;
 			msg_content_seq_id = get_sequence_id(1) as u8;
 
-			//增加一个可选项.
-			tlv_len += 5;
+			//增加可选项.
+			tlv_len += 15;
 			tlvs.push(SmgpTLV::TPUdhi(1));
+			tlvs.push(SmgpTLV::PkTotal(((msg_content_len as f32) / one_content_len as f32).ceil() as u8));
+			tlvs.push(SmgpTLV::PkNumber);
 
 			((msg_content_len as f32) / one_content_len as f32).ceil() as usize
 		};
@@ -488,7 +490,7 @@ impl ProtocolImpl for Smgp30 {
 		//长短信的话,一次性生成多条记录
 		//126是除开内容\发送号码之后所有长度加在一起 6是长短信消息头长度
 		//还需要增加相应的tlv的长度.这里只有一个.
-		let total_len = sms_len * (125 + dest_ids.len() * 21 + msg_content_head_len + tlv_len) + msg_content_len;
+		let total_len = sms_len * (126 + dest_ids.len() * 21 + msg_content_head_len + tlv_len) + msg_content_len;
 
 		// 126 + msg_content_len + dest_ids.len() * 21;
 		let mut dst = BytesMut::with_capacity(total_len);
@@ -501,7 +503,7 @@ impl ProtocolImpl for Smgp30 {
 				&msg_content_code[(i * one_content_len)..((i + 1) * one_content_len)]
 			};
 
-			dst.put_u32((125 + dest_ids.len() * 21 + msg_content_head_len + this_msg_content.len() + tlv_len) as u32);
+			dst.put_u32((126 + dest_ids.len() * 21 + msg_content_head_len + this_msg_content.len() + tlv_len) as u32);
 			dst.put_u32(self.get_type_id(MsgType::Submit));
 			let seq_id = get_sequence_id(dest_ids.len() as u32);
 			seq_ids.push(seq_id);
@@ -533,7 +535,7 @@ impl ProtocolImpl for Smgp30 {
 			dst.extend_from_slice(&this_msg_content[..]); //Msg_Content
 			dst.extend_from_slice(&FILL_ZERO[0..8]); //LinkID
 
-			if !tlvs.is_empty() { self.coder_tlv(&mut dst, &tlvs); }
+			if !tlvs.is_empty() { self.coder_tlv(&mut dst, &tlvs,i + 1); }
 		}
 
 		json[SEQ_IDS] = seq_ids.into();
@@ -722,7 +724,7 @@ impl Smgp30 {
 		buf
 	}
 
-	fn coder_tlv(&self, buf: &mut BytesMut, tlvs: &Vec<SmgpTLV>) {
+	fn coder_tlv(&self, buf: &mut BytesMut, tlvs: &Vec<SmgpTLV>,sms_len: usize) {
 		for tlv in tlvs.iter() {
 			buf.put_u16(tlv.get_u16());
 			match tlv {
@@ -732,7 +734,6 @@ impl Smgp30 {
 				SmgpTLV::ChargeTermType(v) |
 				SmgpTLV::DestTermType(v) |
 				SmgpTLV::PkTotal(v) |
-				SmgpTLV::PkNumber(v) |
 				SmgpTLV::SubmitMsgType(v) |
 				SmgpTLV::SPDealReslt(v) |
 				SmgpTLV::SrcTermType(v) |
@@ -740,6 +741,10 @@ impl Smgp30 {
 				SmgpTLV::SrcType(v) => {
 					buf.put_u16(1);
 					buf.put_u8(*v);
+				}
+				SmgpTLV::PkNumber => {
+					buf.put_u16(1);
+					buf.put_u8(sms_len as u8);
 				}
 				SmgpTLV::DestTermPseudo(b) |
 				SmgpTLV::MsgSrc(b) |
@@ -772,7 +777,7 @@ impl Smgp30 {
 					SmgpTLV::ChargeTermType(_) |
 					SmgpTLV::DestTermType(_) |
 					SmgpTLV::PkTotal(_) |
-					SmgpTLV::PkNumber(_) |
+					SmgpTLV::PkNumber |
 					SmgpTLV::SubmitMsgType(_) |
 					SmgpTLV::SPDealReslt(_) |
 					SmgpTLV::SrcTermType(_) |
@@ -804,7 +809,7 @@ enum SmgpTLV {
 	DestTermType(u8),
 	DestTermPseudo(BytesMut),
 	PkTotal(u8),
-	PkNumber(u8),
+	PkNumber,
 	SubmitMsgType(u8),
 	SPDealReslt(u8),
 	SrcTermType(u8),
@@ -827,7 +832,7 @@ impl SmgpTLV {
 			SmgpTLV::DestTermType(_) => 0x0007,
 			SmgpTLV::DestTermPseudo(_) => 0x0008,
 			SmgpTLV::PkTotal(_) => 0x0009,
-			SmgpTLV::PkNumber(_) => 0x000A,
+			SmgpTLV::PkNumber => 0x000A,
 			SmgpTLV::SubmitMsgType(_) => 0x000B,
 			SmgpTLV::SPDealReslt(_) => 0x000C,
 			SmgpTLV::SrcTermType(_) => 0x000D,
@@ -847,7 +852,7 @@ impl SmgpTLV {
 			0x0005 => SmgpTLV::ChargeTermType(v),
 			0x0007 => SmgpTLV::DestTermType(v),
 			0x0009 => SmgpTLV::PkTotal(v),
-			0x000A => SmgpTLV::PkNumber(v),
+			0x000A => SmgpTLV::PkNumber,
 			0x000B => SmgpTLV::SubmitMsgType(v),
 			0x000C => SmgpTLV::SPDealReslt(v),
 			0x000D => SmgpTLV::SrcTermType(v),

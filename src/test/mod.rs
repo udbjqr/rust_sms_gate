@@ -103,3 +103,37 @@ fn test_smgp_report(){
 }
 
 
+#[test]
+fn test_smgp_long(){
+	let mut json = json::object! {tp_udhi:0,
+		msg_fmt:8,
+		src_id:"10683074333123456",
+		msg_content:"【签名】准备发送一条长短信。应该是多条在一起的。我也不知道这会有多少条。反正应该是挺多的。这个是李端的手机？？？看到这条消息说明长短信收发成功。如果没有看到。说明今天要加晚班改代这是准备发送一条长短信。应该是多条在一起的。我也不知道这会有多少条。反正应该是挺多的。这个是李端的手机？？？看到这条消息说明长短信收发成功。如果没有看到。说明今天要加晚班改代码。。。。。。。。。。。。。。",
+		at_time:"",
+		msg_ids:["070716434445698324119","070716434445698324120"],
+		msg_type:"Submit",
+		seq_id:1918637221,
+		id:11,
+		valid_time:"",
+		dest_ids:["17779522835"],
+		manager_type:"send",
+		entity_id:11,
+		spId:"101016",
+		serviceId:"36201350050006",
+		seq_ids:[2361810514u32,2361810515u32],
+		wait_receipt:true,
+		receive_time:1625647574,
+		need_re_send:true,
+		account_msg_id:"070716434445698324119"
+	};
+
+	let c = Smgp30::new(); 
+
+	let buf = c.encode_submit(&mut json).unwrap();
+
+
+
+	println!("{:X}",buf);
+}
+
+
