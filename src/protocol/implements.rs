@@ -13,7 +13,6 @@ use tokio::io::Error;
 use crate::protocol::msg_type::SmsStatus;
 use crate::protocol::names::{SEQ_ID, PASSAGE_MSG_ID, AUTHENTICATOR, VERSION, STATUS, MSG_TYPE_U32, MSG_CONTENT, MSG_ID, SERVICE_ID, TP_UDHI, SP_ID, VALID_TIME, AT_TIME, SRC_ID, MSG_FMT, DEST_IDS, RESULT, DEST_ID, STATE, SUBMIT_TIME, DONE_TIME, SMSC_SEQUENCE, IS_REPORT, MSG_TYPE_STR, LONG_SMS_TOTAL, LONG_SMS_NOW_NUMBER, SEQ_IDS, LOGIN_NAME, PASSWORD, TIMESTAMP, MSG_IDS};
 use crate::protocol::MsgType;
-use std::ops::Add;
 
 pub trait ProtocolImpl: Send + Sync {
 	fn get_framed(&mut self, buf: &mut BytesMut) -> io::Result<Option<BytesMut>>;
@@ -926,14 +925,31 @@ pub fn copy_to_bytes(buf: &mut BytesMut, len: usize) -> Bytes {
 	}
 }
 
-//TODO 这里需要进行些修改
-pub fn smgp_msg_id_str_to_u64(msg_id: &str) -> (u16, u64) {
-	(0, msg_id.parse().unwrap_or(0))
+//从str转buf
+pub fn smgp_msg_id_str_to_buf(msg_id: &str) -> BytesMut {
+	let mut buf = BytesMut::with_capacity(10);
+
+	let mut is_even = false;
+	let mut num = 0u8;
+	for i in msg_id.as_bytes().iter(){
+		num += i - 0x30;
+
+		if is_even {
+			buf.put_u8(num);
+			num = 0;
+			is_even = false;
+		}else {
+			num = (i - 0x30) << 4;
+			is_even = true;
+		}
+	}
+
+	buf
 }
 
-//TODO 这里需要进行些修改
-pub fn smgp_msg_id_u64_to_str(ismg_id: u16, msg_id: u64) -> String {
-	ismg_id.to_string().add(msg_id.to_string().as_str())
+//从buf转至String
+pub fn smgp_msg_id_buf_to_str(buf: &BytesMut) -> String {
+	format!("{:X}",buf)
 }
 
 pub fn cmpp_msg_id_u64_to_str(mut msg_id: u64) -> String {

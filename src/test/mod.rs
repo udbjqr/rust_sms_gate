@@ -3,6 +3,7 @@
 
 use std::{collections::HashMap, ops::Add};
 
+use bytes::{Buf, BufMut, Bytes, BytesMut};
 use json::JsonValue;
 use tokio::time::Instant;
 use crate::{get_runtime, protocol::{cmpp32::Cmpp32, names::{DEST_ID, DEST_IDS, LONG_SMS_NOW_NUMBER, LONG_SMS_TOTAL, MSG_CONTENT, MSG_ID, MSG_IDS, SRC_ID}}};
@@ -187,3 +188,135 @@ fn handle_long_sms(long_sms_cache: &mut HashMap<String, Vec<Option<JsonValue>>>,
 
 	Some(json)
 }
+
+
+
+#[test]
+fn test_smgp_submit_resp(){
+	let mut buf = BytesMut::with_capacity(20);
+	let mut buf2 = BytesMut::with_capacity(10);
+
+	buf.put_u64(0x0570010706170734);
+	buf.put_u16(0x5654);
+
+  let s = format!("{:X}",buf);
+
+	println!("{}",s);
+
+	let mut is_even = false;
+	let mut num = 0u8;
+	for i in s.as_bytes().iter(){
+		num += i - 0x30;
+
+		if is_even {
+			buf2.put_u8(num);
+			num = 0;
+			is_even = false;
+		}else {
+			num = (i - 0x30) << 4;
+			is_even = true;
+		}
+	}
+
+	println!("{:X}",buf2);
+}
+
+
+#[test]
+fn test_byte_set(){
+	let mut buf = BytesMut::with_capacity(10);
+	unsafe{
+		buf.set_len(buf.capacity());
+	}
+
+	let mut ismg: u32 = 0x543679;
+
+	for i in 0..3 {
+		let d = ((ismg >> ((i * 2 + 1) * 4) & 0xF) << 4) | ismg >> (i * 2 * 4) & 0xF ;
+		buf[2 - i] = d as u8;
+	}
+
+	let mut time = get_time();
+	time /= 100;
+	for i in 0..4 {
+		let d = ((time / 10) % 10) << 4 | time % 10;
+		time  /= 100;
+		buf[6 - i] = d as u8;
+	}
+
+	let mut seq = 2234342325u32 % 1000000;
+
+	for i in 0..3 {
+		let d = ((seq / 10) % 10) << 4 | seq % 10;
+		seq  /= 100;
+		buf[9 - i] = d as u8;
+	}
+
+	println!("{:X}",buf);
+}
+
+
+
+///读一个长度的utf-8 字符编码.确保是utf-8.并且当前值是有效值.
+fn load_utf8_string(buf: &mut BytesMut, len: usize) -> String {
+	unsafe {
+		String::from_utf8_unchecked(Vec::from(copy_to_bytes(buf, len).as_ref())).trim_end_matches(char::from(0)).to_owned()
+	}
+}
+
+///读一个长度字串.做一个异常的保护.
+fn copy_to_bytes(buf: &mut BytesMut, len: usize) -> Bytes {
+	if buf.len() >= len {
+		buf.split_to(len).freeze()
+	} else {
+		log::error!("得到消息出现错误.消息没有足够长度.可用长度:{}.现有长度{}", buf.len(), len);
+		Bytes::new()
+	}
+}
+
+#[test]
+fn test_smgp_report(){
+	let mut buf = BytesMut::with_capacity(20);
+
+	buf.put_u64(0x0570010706170734);
+	buf.put_u64(0x0570010706170734);
+	buf.put_u64(0x5654010032303231);
+	buf.put_u64(0x3037303631373037);
+	buf.put_u64(0x3231383631383137);
+	buf.put_u64(0x3931353632393600);
+	buf.put_u64(0x0000000000000031);
+	buf.put_u64(0x3036383330373400);
+	buf.put_u64(0x0000000000000000);
+	buf.put_u64(0x000000007A69643A);
+	buf.put_u64(0x0570010706170734);
+	buf.put_u64(0x5654735375623A30);
+	buf.put_u64(0x303173446C767264);
+	buf.put_u64(0x3A30303073537562);
+	buf.put_u64(0x6D69745F44617465);
+	buf.put_u64(0x3A32313037303631);
+	buf.put_u64(0x37303773446F6E65);
+	buf.put_u64(0x5F446174653A3231);
+	buf.put_u64(0x3037303631373037);
+	buf.put_u64(0x73537461743A4445);
+	buf.put_u64(0x4C49565244734572);
+	buf.put_u64(0x723A303030735465);
+	buf.put_u64(0x78743A3030374445);
+	buf.put_u64(0x4C49565244000000);
+	buf.put_u64(0x0000000000000000);
+	buf.put_u32(0x00000000);
+	buf.put_u16(0x0000);
+	buf.put_u8(0x00);
+
+
+	let tp = buf.get_u32();
+	let seq = buf.get_u32();
+
+	let mut msg_id_buf = buf.split_to(0);
+
+	let c = Smgp30::new(); 
+
+	let json = c.decode_deliver(&mut buf, seq, tp).unwrap();
+	println!("{:?}",json);
+}
+
+

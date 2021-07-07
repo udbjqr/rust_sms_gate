@@ -1,10 +1,10 @@
 use tokio_util::codec::{LengthDelimitedCodec, Decoder};
-use crate::protocol::implements::{ProtocolImpl, get_time, fill_bytes_zero, load_utf8_string, decode_msg_content, smgp_msg_id_u64_to_str, smgp_msg_id_str_to_u64};
+use crate::protocol::implements::{ProtocolImpl, get_time, fill_bytes_zero, load_utf8_string, decode_msg_content, smgp_msg_id_buf_to_str, smgp_msg_id_str_to_buf};
 use bytes::{BytesMut, BufMut, Buf};
 use tokio::io;
 use crate::protocol::{SmsStatus, MsgType};
 use json::JsonValue;
-use crate::protocol::names::{LOGIN_NAME, PASSWORD, VERSION, MSG_TYPE_U32, SEQ_ID, AUTHENTICATOR, MSG_CONTENT, SERVICE_ID, VALID_TIME, AT_TIME, SRC_ID, DEST_IDS, SEQ_IDS, MSG_FMT, MSG_ID, RESULT, DEST_ID, SMGP_RECEIVE_TIME, SUBMIT_TIME, DONE_TIME, STATE, ERROR_CODE, TEXT, TIMESTAMP, MSG_IDS};
+use crate::protocol::names::{LOGIN_NAME,IS_REPORT,PASSAGE_MSG_ID, PASSWORD, VERSION, MSG_TYPE_U32, SEQ_ID, AUTHENTICATOR, MSG_CONTENT, SERVICE_ID, VALID_TIME, AT_TIME, SRC_ID, DEST_IDS, SEQ_IDS, MSG_FMT, MSG_ID, RESULT, DEST_ID, SMGP_RECEIVE_TIME, SUBMIT_TIME, DONE_TIME, STATE, ERROR_CODE, TIMESTAMP, MSG_IDS};
 use crate::protocol::msg_type::MsgType::{Connect, SubmitResp};
 use std::io::Error;
 use crate::global::{get_sequence_id, FILL_ZERO};
@@ -176,35 +176,25 @@ impl ProtocolImpl for Smgp30 {
 
 		let submit_status = self.get_status_id(&status);
 		let msg_id = self.create_msg_id(dest_ids.len() as u32);
-		let ismg_id  = self.bcd_ismg_id();
+		json[MSG_ID] = smgp_msg_id_buf_to_str(&msg_id).into();
 
 		let mut buf = BytesMut::with_capacity(26);
 		buf.put_u32(26);
 		buf.put_u32(self.get_type_id(SubmitResp));
 		buf.put_u32(seq_id);
-		buf.put_u16(ismg_id);
-		buf.put_u64(msg_id);
+		buf.put(msg_id);
 		buf.put_u32(submit_status);
 
-		json[MSG_ID] = smgp_msg_id_u64_to_str(ismg_id,msg_id).into();
 		Some(buf)
 	}
 
 	fn encode_report(&self, json: &mut JsonValue) -> Result<BytesMut, Error> {
-		let text = match json[TEXT].as_str() {
-			None => {
-				log::error!("没有text字串.退出..json:{}", json);
-				return Err(io::Error::new(io::ErrorKind::NotFound, "没有text字串"));
-			}
-			Some(v) => v
-		};
-
-		let (ismg_id,resp_msg_id) = match json[MSG_ID].as_str() {
+		let msg_id = match json[MSG_ID].as_str() {
 			None => {
 				log::error!("没有msg_id字串.退出..json:{}", json);
 				return Err(io::Error::new(io::ErrorKind::NotFound, "没有msg_id字串"));
 			}
-			Some(v) => smgp_msg_id_str_to_u64(v)
+			Some(v) => smgp_msg_id_str_to_buf(v)
 		};
 
 		let receive_time = match json[SMGP_RECEIVE_TIME].as_str() {
@@ -256,33 +246,33 @@ impl ProtocolImpl for Smgp30 {
 		};
 
 		//状态报告长度固定
-		let mut dst = BytesMut::with_capacity(155);
+		let mut dst = BytesMut::with_capacity(183);
 
-		dst.put_u32(155);
+		dst.put_u32(183);
 		dst.put_u32(self.get_type_id(MsgType::Deliver));
 		let mut seq_ids = Vec::with_capacity(1);
 		let seq_id = get_sequence_id(1);
 		seq_ids.push(seq_id);
 		dst.put_u32(seq_id);
 
-		dst.put_u16(self.bcd_ismg_id());
-		dst.put_u64(self.create_msg_id(1)); //上面两个组成 msg_id
+		dst.put(msg_id.clone());
 		dst.put_u8(1); //IsReport
 		dst.put_u8(0); //MsgFormat
 		fill_bytes_zero(&mut dst, receive_time, 14);//receive_time 14
 		fill_bytes_zero(&mut dst, src_id, 21);//src_id 21
 		fill_bytes_zero(&mut dst, dest_id, 21);//dest_id 21
-		dst.put_u8(74); //Msg_Length 状态报告长度固定
 
-		dst.put_u16(ismg_id);
-		dst.put_u64(resp_msg_id);
-		dst.extend_from_slice("001".as_bytes()); //sub	3
-		dst.extend_from_slice("001".as_bytes()); //Dlvrd	3
+		// id:XXXXXXXXXX sub:000 dlvrd:000 Submit_Date:0901151559 Done_Date:0901151559 Stat:DELIVRD err:000 text:
+		dst.put_u8(102); //Msg_Length 状态报告长度固定
+		dst.extend_from_slice("id:".as_bytes()); //id:
+		dst.put(msg_id);// 10位的msg_id
+		dst.extend_from_slice(" sub:001  dlvrd:000 Submit_Date:".as_bytes()); //这些是固定格式
 		fill_bytes_zero(&mut dst, submit_time, 10); //submit_time 10
+		dst.extend_from_slice(" Done_Date:".as_bytes());
 		fill_bytes_zero(&mut dst, done_time, 10); //done_time 10
+		dst.extend_from_slice("  Stat:".as_bytes());
 		fill_bytes_zero(&mut dst, stat, 7); //Stat 7
-		fill_bytes_zero(&mut dst, stat, 3); //Err 3
-		fill_bytes_zero(&mut dst, text, 20); //Txt 20
+		dst.extend_from_slice("   err:000 text:".as_bytes());
 
 		json[SEQ_IDS] = seq_ids.into();
 
@@ -290,12 +280,12 @@ impl ProtocolImpl for Smgp30 {
 	}
 
 	fn encode_deliver(&self, json: &mut JsonValue) -> Result<BytesMut, Error> {
-		let (ismg_id,msg_id) = match json[MSG_ID].as_str() {
+		let _msg_id = match json[MSG_ID].as_str() {
 			None => {
 				log::error!("没有msg_id字串.退出..json:{}", json);
 				return Err(io::Error::new(io::ErrorKind::NotFound, "没有msg_id字串"));
 			}
-			Some(v) => smgp_msg_id_str_to_u64(v)
+			Some(v) => smgp_msg_id_str_to_buf(v)
 		};
 
 		let receive_time = match json[SMGP_RECEIVE_TIME].as_str() {
@@ -383,8 +373,7 @@ impl ProtocolImpl for Smgp30 {
 			dst.put_u32(seq_id);
 			seq_ids.push(seq_id);
 
-			dst.put_u16(ismg_id);
-			dst.put_u64(msg_id);
+			dst.put(self.create_msg_id(1));
 
 			dst.put_u8(0); //IsReport
 			dst.put_u8(15); //MsgFormat
@@ -557,8 +546,8 @@ impl ProtocolImpl for Smgp30 {
 		json[MSG_TYPE_U32] = tp.into();
 		json[SEQ_ID] = seq.into();
 
-		let mut msg_id_buf = buf.split_to(10);
-		json[MSG_ID] = self.decode_msg_id(&mut msg_id_buf).into();
+		let msg_id = smgp_msg_id_buf_to_str(&buf.split_to(10));
+		json[MSG_ID] = msg_id.into();
 		json[RESULT] = buf.get_u32().into();//result 4
 
 		Ok(json)
@@ -569,8 +558,8 @@ impl ProtocolImpl for Smgp30 {
 		json[MSG_TYPE_U32] = tp.into();
 		json[SEQ_ID] = seq.into();
 
-		let mut msg_id_buf = buf.split_to(10);
-		json[MSG_ID] = self.decode_msg_id(&mut msg_id_buf).into();
+		let msg_id = smgp_msg_id_buf_to_str(&buf.split_to(10));
+		json[MSG_ID] = msg_id.into();
 		let is_report = buf.get_u8(); //Registered_Delivery	1
 		let msg_fmt = buf.get_u8();
 		json[MSG_FMT] = msg_fmt.into(); //Msg_Fmt 1
@@ -594,13 +583,28 @@ impl ProtocolImpl for Smgp30 {
 			json[MSG_FMT] = msg_fmt.into(); //Msg_Fmt 1
 			decode_msg_content(&mut content_buf, msg_fmt, msg_content_len, &mut json, is_long_sms)?;
 		} else {
-			let mut msg_id_buf = buf.split_to(10);
-			json[MSG_ID] = self.decode_msg_id(&mut msg_id_buf).into();
-			buf.advance(6); //sub 3  Dlvrd 3
-			json[SUBMIT_TIME] = load_utf8_string(buf, 10).into(); // Submit_time
-			json[DONE_TIME] = load_utf8_string(buf, 10).into(); // Done_time
-			json[STATE] = load_utf8_string(buf, 7).into(); // Stat
-			json[ERROR_CODE] = load_utf8_string(buf, 3).into(); // ERR
+				// id:XXXXXXXXXX sub:000 dlvrd:000 Submit_Date:0901151559 Done_Date:0901151559 Stat:DELIVRD err:000 text:
+			json[IS_REPORT] = true.into(); //状态报告增加.
+
+			content_buf.advance(3);//名字："id:"
+
+			let msg_id = smgp_msg_id_buf_to_str(&content_buf.split_to(10));//"id的实际值"
+			json[PASSAGE_MSG_ID] = msg_id.into();
+
+			content_buf.advance(18); //名字：“ sub:001 dlvrd:001”
+
+			content_buf.advance(13); //“ Submit_Date:”
+			json[SUBMIT_TIME] = load_utf8_string(&mut content_buf, 10).into(); // Submit_Date
+			
+			content_buf.advance(11); //“ Done_Date:”
+			json[DONE_TIME] = load_utf8_string(&mut content_buf, 10).into(); // Done_Date
+			
+			content_buf.advance(6); //“ Stat:”
+			json[STATE] = load_utf8_string(&mut content_buf, 7).into(); // Stat
+
+			content_buf.advance(5); //“ Err:”
+			json[ERROR_CODE] = load_utf8_string(&mut content_buf, 3).into(); // ERR
+
 
 			//是状态报告.修改一下返回的类型.
 			json[MSG_TYPE_U32] = self.get_type_id(MsgType::Report).into();
@@ -687,48 +691,36 @@ impl Smgp30 {
 		}
 	}
 
-	fn bcd_ismg_id(&self) -> u16 {
-		let mut result = 0u16;
-		let mut te = (*ISMG_ID / 10000) as u16;
-		let mut e;
+	//根据跳过数量创建msgId。len:当前创建完成后，步进多少的值
+	//必然返回10位长度。
+	fn create_msg_id(&self, len: u32) -> BytesMut {
+		let mut buf = BytesMut::with_capacity(10);
+		unsafe{
+			buf.set_len(buf.capacity());
+		}
 
+		let ismg = *ISMG_ID;
+		for i in 0..3 {
+			let d = ((ismg >> ((i * 2 + 1) * 4) & 0xF) << 4) | ismg >> (i * 2 * 4) & 0xF ;
+			buf[2 - i] = d as u8;
+		}
+
+		let mut time = get_time() / 100; //去掉秒
 		for i in 0..4 {
-			e = te / (10_u16.pow(3 - i));
-			te = te % (10_u16.pow(3 - i));
+			let d = ((time / 10) % 10) << 4 | time % 10;
+			time  /= 100;
+			buf[6 - i] = d as u8;
+		}
 
-			result = result << 4;
-			result = result | (e as u16);
-		};
+		let mut seq = get_sequence_id(len) % 1000000;
+		for i in 0..3 {
+			let d = ((seq / 10) % 10) << 4 | seq % 10;
+			seq  /= 100;
+			buf[9 - i] = d as u8;
+		}
 
-		result
+		buf
 	}
-
-	//TODO 这个部分应该需要修改
-	fn create_msg_id(&self, len: u32) -> u64 {
-		let mut result = 0u64;
-		let mut te = get_time() as u64 / 100;
-		let mut e;
-
-		for i in 0..8 {
-			e = te / (10_u64.pow(7 - i));
-			te = te % (10_u64.pow(7 - i));
-
-			result = result << 4;
-			result = result | (e as u64);
-		};
-
-		te = (get_sequence_id(len) % 1000000) as u64;
-		for i in 0..6 {
-			e = te / (10_u64.pow(5 - i));
-			te = te % (10_u64.pow(5 - i));
-
-			result = result << 4;
-			result = result | (e as u64);
-		};
-
-		result
-	}
-
 
 	fn coder_tlv(&self, buf: &mut BytesMut, tlvs: &Vec<SmgpTLV>) {
 		for tlv in tlvs.iter() {
@@ -760,17 +752,6 @@ impl Smgp30 {
 				}
 			}
 		}
-	}
-
-	fn decode_msg_id(&self, buf: &mut BytesMut) -> String {
-		let mut ismg_id = buf.get_u16();
-		ismg_id = ismg_id << 8 | buf.get_u8() as u16;
-
-		let mut msg_id = buf.get_u32() as u64;
-		msg_id = msg_id << 16 | buf.get_u16() as u64;
-		msg_id = msg_id << 8 | buf.get_u8() as u64;
-
-		smgp_msg_id_u64_to_str(ismg_id,msg_id)
 	}
 
 	fn decode_tlvs(&self, buf: &mut BytesMut, tlvs: &mut Vec<SmgpTLV>) {
