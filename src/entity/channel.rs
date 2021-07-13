@@ -8,10 +8,10 @@ use tokio::time::{Duration, timeout};
 use tokio_util::codec::Framed;
 
 use crate::entity::EntityManager;
+use crate::get_runtime;
 use crate::protocol::{MsgType, SmsStatus::{self, MessageError, Success}, Protocol};
 use crate::protocol::names::{STATUS, ENTITY_ID, WAIT_RECEIPT, ADDRESS, MSG_TYPE_STR, VERSION, LOGIN_NAME};
 use std::time::{Instant};
-use crate::entity::as_custom::check_custom_login;
 use std::net::{IpAddr, SocketAddr};
 use crate::global::{message_sender, TOPIC_TO_B_FAILURE};
 
@@ -144,7 +144,7 @@ impl Channel {
 	/// 这里应该已经处理完接收和发送的消息。
 	/// 送到这里的都是单个短信的消息
 	async fn start_work(&mut self, framed: &mut Framed<TcpStream, Protocol>) {
-		log::debug!("连接成功.channel准备处理数据.{}", self.id);
+		log::debug!("连接成功.channel准备处理数据.id:{}", self.id);
 
 		let mut active_test = json::object! {
 					msg_type : "ActiveTest"
@@ -300,7 +300,6 @@ impl Channel {
 							info!("当前连接已经断开。。。。id:{}",self.id);
 
 							//连接断开的处理。
-							self.tell_entity_disconnect().await;
 							self.clear().await;
 							return;
 						}
@@ -314,18 +313,6 @@ impl Channel {
 					idle_count = idle_count + 1;
 				}
 			}
-		}
-	}
-
-	async fn tell_entity_disconnect(&mut self) {
-		//发送连接断开消息。
-		let dis = json::object! {
-			msg_type:"Terminate",
-			id:self.id,
-		};
-
-		if let Err(e) = self.channel_to_entity_tx.as_ref().unwrap().send(dis).await {
-			error!("发送消息出现异常。e:{}", e)
 		}
 	}
 
@@ -387,7 +374,7 @@ impl Channel {
 
 		let entity = if is_server {
 			if let Some((_, en)) = entitys.iter().find(|(_, en)| {
-				en.is_server() && en.get_login_name() == login_info[LOGIN_NAME].as_str().unwrap_or("")
+				en.can_login() && en.get_login_name() == login_info[LOGIN_NAME].as_str().unwrap_or("")
 			}) {
 				log::trace!("找到请求loginName对应的entity:{:?}", en);
 				en
@@ -414,7 +401,7 @@ impl Channel {
 		};
 
 		if is_server {
-			if let Some(result_err) = check_custom_login(&login_info, entity, &mut self.protocol, ip_addr) {
+			if let Some(result_err) = entity.login(&login_info, &mut self.protocol, ip_addr) {
 				return result_err;
 			}
 		}
@@ -455,5 +442,28 @@ impl Channel {
 		}
 
 		log::trace!("通道关闭过程结束.{}", self.id);
+	}
+}
+
+
+impl Drop for Channel {
+	fn drop(&mut self) {
+		log::trace!("开始进行注销操作。id:{}", self.id);
+
+		//发送连接断开消息。
+		let dis = json::object! {
+			msg_type:"Terminate",
+			id:self.id,
+		};
+		
+		if self.channel_to_entity_tx.is_some() {
+			let channel_to_entity_tx = self.channel_to_entity_tx.as_ref().unwrap().clone();
+		
+			get_runtime().spawn(async move {
+				if let Err(e) = channel_to_entity_tx.send(dis).await {
+					error!("发送消息出现异常。e:{}", e)
+				}
+			});
+		}
 	}
 }

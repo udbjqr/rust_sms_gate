@@ -122,12 +122,12 @@ Receiver<JsonValue>, mut from_channel: mpsc::Receiver<JsonValue>, entity_id: u32
 
 		tokio::select! {
 			from_manager_msg = manager_to_entity_rx.recv() => {
-				if !handle_from_manager_rx(from_manager_msg,&mut context).await{
+				if !handle_from_manager_rx(from_manager_msg,&mut context).await {
 					return;
 				}
 			}
 			from_channel_msg = from_channel.recv() => {
-			if !handle_from_channel_rx(from_channel_msg,&mut context).await{
+			if !handle_from_channel_rx(from_channel_msg,&mut context).await {
 					return;
 				}
 			}
@@ -282,7 +282,7 @@ async fn handle_from_channel_rx(msg: Option<JsonValue>, context: &mut EntityRunC
 						}
 						//有通道连接上了
 						(MsgType::Connect, _) => {
-							log::trace!("收到通道发过来的连接消息.msg:{}", msg);
+							log::trace!("有通道连接上了.msg:{}", msg);
 							if let Some(ind) = msg["channel_id"].as_u32() {
 								let mut save = TEMP_SAVE.write().await;
 								if let Some((entity_to_channel_priority_tx, entity_to_channel_common_tx)) = save.remove(&ind) {

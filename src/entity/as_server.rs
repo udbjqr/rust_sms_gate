@@ -12,6 +12,8 @@ use crate::get_runtime;
 use crate::protocol::{SmsStatus, Protocol};
 use crate::global::{TEMP_SAVE, get_sequence_id};
 
+
+///用来连接服务端（上游）
 #[derive(Debug)]
 pub struct ServerEntity {
 	id: u32,
@@ -31,6 +33,8 @@ pub struct ServerEntity {
 	protocol: Protocol,
 	service_id: String,
 	sp_id: String,
+	gateway_login_name: String,
+	gateway_password: String
 }
 
 impl ServerEntity {
@@ -46,6 +50,8 @@ impl ServerEntity {
 	           read_limit: u32,
 	           write_limit: u32,
 	           max_channel_number: usize,
+						 gateway_login_name: String,
+						 gateway_password: String,
 	           config: JsonValue,
 	           send_to_manager_tx: mpsc::Sender<JsonValue>,
 	) -> Self {
@@ -69,16 +75,16 @@ impl ServerEntity {
 			channel_to_entity_tx: None,
 			is_active: Arc::new(AtomicBool::new(true)),
 			protocol,
+			gateway_login_name,
+			gateway_password,
 		}
 	}
 	///开启一个entity的启动。连接对端,准备接收数据等
 	pub async fn start(&mut self) -> mpsc::Sender<JsonValue> {
-		log::debug!("开始进行实体的启动操作。启动消息接收。id:{}", self.id);
+		log::info!("开始进行实体的启动操作。开始连接上游服务器。id:{}", self.id);
 
 		let (manage_to_entity_tx, manage_to_entity_rx) = mpsc::channel(0xff);
 		let (channel_to_entity_tx, channel_to_entity_rx) = mpsc::channel(self.read_limit as usize);
-
-		log::info!("通道{},,开始启动处理消息.", self.name);
 
 		//这里开始自己的消息处理
 		get_runtime().spawn(start_entity(manage_to_entity_rx, channel_to_entity_rx, self.id, self.service_id.clone(), self.sp_id.clone(), self.now_channel_number.clone(), EntityType::Server));
@@ -138,7 +144,7 @@ impl ServerEntity {
 				}
 
 				tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
-			}
+			}	
 		});
 	}
 }
@@ -196,8 +202,9 @@ impl Entity for ServerEntity {
 		EntityType::Server
 	}
 
-	fn is_server(&self) -> bool {
-		false
+	fn can_login(&self) -> bool {
+		// 有可能允许服务端进行连接。根据是否存在服务端账号进行判断
+		self.gateway_login_name.len() > 0
 	}
 }
 

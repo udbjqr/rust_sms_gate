@@ -135,5 +135,3 @@ fn test_smgp_long(){
 
 	println!("{:X}",buf);
 }
-
-

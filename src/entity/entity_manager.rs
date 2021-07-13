@@ -13,7 +13,7 @@ use crate::entity::{CustomEntity, Entity};
 use crate::entity::as_server::ServerEntity;
 use crate::get_runtime;
 use crate::global::{load_config_file, TOPIC_FROM_B_SUBMIT, TOPIC_FROM_B_DELIVER, TOPIC_FROM_B_REPORT, TOPIC_PASSAGE_REQUEST_STATE};
-use crate::protocol::names::{MANAGER_TYPE, VERSION, SERVICE_ID, SP_ID, LOGIN_NAME, PASSWORD, ADDRESS, NAME, READ_LIMIT, WRITE_LIMIT, PROTOCOL, MAX_CHANNEL_NUMBER, ALLOW_ADDRS};
+use crate::protocol::names::{ADDRESS, ALLOW_ADDRS, GATEWAY_LOGIN_NAME, GATEWAY_PASSWORD, LOGIN_NAME, MANAGER_TYPE, MAX_CHANNEL_NUMBER, NAME, PASSWORD, PROTOCOL, READ_LIMIT, SERVICE_ID, SP_ID, VERSION, WRITE_LIMIT};
 
 ///实体的管理对象。
 /// 负责处理消息队列送过来的实体的开启、关闭等操作
@@ -137,7 +137,7 @@ pub async fn start_server(from_servers: StreamConsumer) {
 					Ok(msg) => {
 						let body = match msg.payload_view::<str>() {
 							Some(Ok(body)) => {
-								debug!("收到消息:msg:{}", body);
+								debug!("收到消息:topic:{},msg:{}",msg.topic(), body);
 								body
 							},
 							Some(Err(e)) => {
@@ -195,7 +195,7 @@ async fn handle_from_entity_msg(manager_type: &str, msg: &JsonValue, context: &m
 			}
 			context.senders.remove(&id);
 		}
-		//TODO 继续收到entity来的消息
+		//继续收到entity来的消息
 		_ => {
 			log::error!("收到一个未知的manager_type.不处理。跳过。msg:{}", msg);
 		}
@@ -273,6 +273,8 @@ async fn handle_queue_msg(topic: &str, mut json: JsonValue, context: &mut RunCon
 					json[READ_LIMIT].as_u32().unwrap_or(0xffffffff),
 					json[WRITE_LIMIT].as_u32().unwrap_or(0xffffffff),
 					json[MAX_CHANNEL_NUMBER].as_usize().unwrap_or(0x1),
+					json[GATEWAY_LOGIN_NAME].as_str().unwrap_or("").to_string(),
+					json[GATEWAY_PASSWORD].as_str().unwrap_or("").to_string(),
 					json,
 					context.entity_to_manager_tx.clone(),
 				);
@@ -282,6 +284,8 @@ async fn handle_queue_msg(topic: &str, mut json: JsonValue, context: &mut RunCon
 				//放入管理队列的数据
 				context.senders.insert(entity.get_id(), send_to_entity);
 				entitys.insert(entity.get_id(), Box::new(entity));
+
+				//TODO 这里判断如果是对端的状态报告向我们另外连接发回。需要在CustomEntity里面再增加一条数据，以允许对方连接上
 			}
 		}
 		"account.remove" | "passage.remove" => {

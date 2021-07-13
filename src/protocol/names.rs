@@ -47,6 +47,11 @@ pub static ALLOW_ADDRS: &'static str = "allowedAddr";
 pub static MAX_CHANNEL_NUMBER: &'static str = "connNum";
 pub static WRITE_LIMIT: &'static str = "writeLimit";
 pub static NAME: &'static str = "name";
+///上游连接我方时的账号
+pub static GATEWAY_LOGIN_NAME: &'static str = "gatewayServerPassword";
+///上游连接我方时的密码
+pub static GATEWAY_PASSWORD: &'static str = "gatewayServerUsername";
+
 ///长短信总条数
 pub static LONG_SMS_TOTAL: &'static str = "l_s_total";
 ///长短信当前第几条
