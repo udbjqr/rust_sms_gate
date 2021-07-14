@@ -165,10 +165,10 @@ impl Channel {
 		let entity_to_channel_priority_rx = self.entity_to_channel_priority_rx.as_mut().unwrap();
 		let entity_to_channel_common_rx = self.entity_to_channel_common_rx.as_mut().unwrap();
 
-		//上一次执行的时间戳
 		let mut curr_tx: u32 = 0;
 		let mut curr_rx: u32 = 0;
 		let mut idle_count: u16 = 0;
+		let mut wait_active_resp = false;
 
 		let mut timestamp = Instant::now();
 		let one_secs = Duration::from_secs(1);
@@ -183,10 +183,16 @@ impl Channel {
 
 			//当空闲超过时间后发送心跳
 			if idle_count > 30 {
+				//当发送激活消息但依然未收到任何回复
+				if wait_active_resp {
+					return;
+				}
+
 				if let Ok(send_msg) = self.protocol.encode_message(&mut active_test) {
 					if let Err(e) = framed.send(send_msg).await {
 						error!("发送心跳回执出现错误, e:{}", e);
 					}
+					wait_active_resp = true;
 				} else {
 					log::info!("没有得到编码完成的数据.不发送心跳.")
 				}
@@ -198,6 +204,7 @@ impl Channel {
 			tokio::select! {
 				biased;
 				msg = entity_to_channel_priority_rx.recv(),if curr_tx < self.tx_limit => {
+					wait_active_resp = false;
 					idle_count = 0;
 					match msg {
 						Some(mut send) => {
@@ -226,6 +233,7 @@ impl Channel {
 					}
 				}
 				msg = entity_to_channel_common_rx.recv(),if curr_tx < self.tx_limit => {
+					wait_active_resp = false;
 					idle_count = 0;
 					match msg {
 						Some(mut send) => {
@@ -254,7 +262,6 @@ impl Channel {
 					}
 				}
 				msg = framed.next() => {
-					idle_count = 0;
 				  match msg {
 				    Some(Ok(mut json)) => {
 							log::info!("{}通道收到消息:{}",self.id,&json);

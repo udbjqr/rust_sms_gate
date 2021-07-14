@@ -284,8 +284,6 @@ async fn handle_queue_msg(topic: &str, mut json: JsonValue, context: &mut RunCon
 				//放入管理队列的数据
 				context.senders.insert(entity.get_id(), send_to_entity);
 				entitys.insert(entity.get_id(), Box::new(entity));
-
-				//TODO 这里判断如果是对端的状态报告向我们另外连接发回。需要在CustomEntity里面再增加一条数据，以允许对方连接上
 			}
 		}
 		"account.remove" | "passage.remove" => {
