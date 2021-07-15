@@ -3,12 +3,12 @@
 		"servers": "118.31.45.242:9092"
 	},
 	"client": {
-		"id": "asServertest"
+		"id": "asServertest2"
 	},
 	"group": {
-		"id": "asServertest",
+		"id": "asServertest2",
 		"instance": {
-			"id": "asServer1test"
+			"id": "asServer1test2"
 		}
 	}
 }

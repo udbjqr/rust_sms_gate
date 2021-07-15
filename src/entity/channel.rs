@@ -265,30 +265,37 @@ impl Channel {
 				  match msg {
 				    Some(Ok(mut json)) => {
 							log::info!("{}通道收到消息:{}",self.id,&json);
-              if curr_rx < self.rx_limit {
-								//收到消息,生成回执...当收到的不是回执才回返回Some.
-								if let Some(resp) = self.protocol.encode_receipt(SmsStatus::Success, &mut json) {
+							let ty = json[MSG_TYPE_STR].as_str().unwrap_or("").into();
+
+							match ty {
+								MsgType::Submit => {
 									//当消息需要需要返回的才记录接收数量
 									curr_rx = curr_rx + 1;
-									if let Err(e) = channel_to_entity_tx.send(json).await {
-										log::error!("向实体发送消息出现异常, e:{}", e);
-									}
-
+								}
+								_ => {
+									//这里目前不用做处理
+								}
+							}
+							
+							//只有发送短信才进行判断
+              if ty != MsgType::Submit || curr_rx <= self.rx_limit {
+								//生成回执...当收到的是回执才回返回Some.
+								if let Some(resp) = self.protocol.encode_receipt(SmsStatus::Success, &mut json) {
 									if let Err(e) = framed.send(resp).await {
 										error!("发送回执出现错误, e:{}", e);
 									}
-								} else {
-									//把回执发回给实体处理回执
-									if let Err(e) = channel_to_entity_tx.send(json).await {
-										log::error!("向实体发送消息出现异常, e:{}", e);
-									}
 								}
+								
+								//向实体对象发送消息准备进行处理
+								if let Err(e) = channel_to_entity_tx.send(json).await {
+									log::error!("向实体发送消息出现异常, e:{}", e);
+								}
+								
 							} else {
 								// 超出,返回流量超出
 								if let Some(resp) = self.protocol.encode_receipt(SmsStatus::TrafficRestrictions, &mut json) {
-									log::debug!("当前超出流量.json:{}.已发:{}.可发:{}",json,curr_rx,self.rx_limit);
-									//当消息需要需要返回的才记录接收数量
-									curr_rx = curr_rx + 1;
+									log::debug!("当前超出流量.json:{}.已发:{}.可发:{}", json, curr_rx, self.rx_limit);
+
 									if let Err(e) = framed.send(resp).await{
 										error!("发送回执出现错误, e:{}",e);
 									}
