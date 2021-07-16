@@ -107,9 +107,11 @@ impl ServerEntity {
 		let id = self.id.clone();
 		let max_num = self.max_channel_number.clone();
 		let now_num = self.now_channel_number.clone();
+		let sp_id = self.sp_id.clone();
 
 		get_runtime().spawn(async move {
 			let login_msg = json::object! {
+				spId: sp_id,
 				loginName: user_name,
 				password: password,
 				gatewayIp: addr,

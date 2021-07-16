@@ -41,12 +41,12 @@ impl ProtocolImpl for Sgip {
 			MsgType::ConnectResp => 0x80000001,
 			MsgType::Terminate => 0x00000002,
 			MsgType::TerminateResp => 0x80000002,
-			MsgType::Query => 0x00000006,
-			MsgType::QueryResp => 0x80000006,
-			MsgType::Cancel => 0x00000007,
-			MsgType::CancelResp => 0x80000007,
-			MsgType::ActiveTest => 0x00000008,
-			MsgType::ActiveTestResp => 0x80000008,
+			MsgType::Query => 0x00000007,
+			MsgType::QueryResp => 0x80000007,
+			MsgType::Cancel => 0x00000008,
+			MsgType::CancelResp => 0x80000008,
+			MsgType::ActiveTest => 0x00000006,
+			MsgType::ActiveTestResp => 0x80000006,
 			MsgType::UNKNOWN => 0,
 			_ => 0
 		}
@@ -64,12 +64,12 @@ impl ProtocolImpl for Sgip {
 			0x80000001 => MsgType::ConnectResp,
 			0x00000002 => MsgType::Terminate,
 			0x80000002 => MsgType::TerminateResp,
-			0x00000006 => MsgType::Query,
-			0x80000006 => MsgType::QueryResp,
-			0x00000007 => MsgType::Cancel,
-			0x80000007 => MsgType::CancelResp,
-			0x00000008 => MsgType::ActiveTest,
-			0x80000008 => MsgType::ActiveTestResp,
+			0x00000007 => MsgType::Query,
+			0x80000007 => MsgType::QueryResp,
+			0x00000008 => MsgType::Cancel,
+			0x80000008 => MsgType::CancelResp,
+			0x00000006 => MsgType::ActiveTest,
+			0x80000006 => MsgType::ActiveTestResp,
 			_ => MsgType::UNKNOWN,
 		}
 	}
@@ -130,8 +130,8 @@ impl ProtocolImpl for Sgip {
 			}
 		};
 
-		let node_id = match json[SP_ID].as_u32() {
-			Some(v) => v,
+		let node_id = match json[SP_ID].as_str() {
+			Some(v) => v.parse().unwrap_or(0),
 			None => {
 				log::error!("没有node_id.退出..json:{}", json);
 				return Err(io::Error::new(io::ErrorKind::NotFound, "没有node_id"));
@@ -363,6 +363,10 @@ impl ProtocolImpl for Sgip {
 
 		json[SEQ_IDS] = seq_ids.into();
 		Ok(dst)
+	}
+
+	fn encode_active_test(&self, json: &mut JsonValue) -> Result<BytesMut, Error> {
+		Ok(BytesMut::with_capacity(0))
 	}
 
 	fn encode_deliver(&self, json: &mut JsonValue) -> Result<BytesMut, Error> {

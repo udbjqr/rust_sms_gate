@@ -263,7 +263,8 @@ async fn handle_from_channel_rx(msg: Option<JsonValue>, context: &mut EntityRunC
 
 							let id = match msg[ID].as_usize() {
 								None => {
-									log::error!("未收到关闭请求过来的id。msg:{}", msg);
+									log::error!("未收到关闭请求过来的id。msg:{}..", msg);
+									
 									//这里只是退出当前操作
 									return true;
 								}

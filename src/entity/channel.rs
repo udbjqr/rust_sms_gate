@@ -10,7 +10,7 @@ use tokio_util::codec::Framed;
 use crate::entity::EntityManager;
 use crate::get_runtime;
 use crate::protocol::{MsgType, SmsStatus::{self, MessageError, Success}, Protocol};
-use crate::protocol::names::{STATUS, ENTITY_ID, WAIT_RECEIPT, ADDRESS, MSG_TYPE_STR, VERSION, LOGIN_NAME};
+use crate::protocol::names::{ADDRESS, ENTITY_ID, ID, LOGIN_NAME, MSG_TYPE_STR, STATUS, VERSION, WAIT_RECEIPT};
 use std::time::{Instant};
 use std::net::{IpAddr, SocketAddr};
 use crate::global::{message_sender, TOPIC_TO_B_FAILURE};
@@ -272,11 +272,15 @@ impl Channel {
 									//当消息需要需要返回的才记录接收数量
 									curr_rx = curr_rx + 1;
 								}
+								MsgType::Terminate => {
+									//收到终止消息。将ID带上
+									json[ID] = self.id.into();
+								}
 								_ => {
 									//这里目前不用做处理
 								}
 							}
-							
+
 							//只有发送短信才进行判断
               if ty != MsgType::Submit || curr_rx <= self.rx_limit {
 								//生成回执...当收到的是回执才回返回Some.
@@ -284,6 +288,8 @@ impl Channel {
 									if let Err(e) = framed.send(resp).await {
 										error!("发送回执出现错误, e:{}", e);
 									}
+								} else {
+									error!("生成回执失败。。。")
 								}
 								
 								//向实体对象发送消息准备进行处理
@@ -438,7 +444,7 @@ impl Channel {
 	}
 
 	async fn clear(&mut self) {
-		log::debug!("通道关闭过程.{}", self.id);
+		log::trace!("通道关闭过程.{}", self.id);
 
 		let sender = message_sender();
 		if let Some(entity_to_channel_priority_rx) = self.entity_to_channel_priority_rx.as_mut() {
@@ -462,8 +468,6 @@ impl Channel {
 
 impl Drop for Channel {
 	fn drop(&mut self) {
-		log::trace!("开始进行注销操作。id:{}", self.id);
-
 		//发送连接断开消息。
 		let dis = json::object! {
 			msg_type:"Terminate",
