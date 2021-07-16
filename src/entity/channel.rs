@@ -185,6 +185,7 @@ impl Channel {
 			if idle_count > 30 {
 				//当发送激活消息但依然未收到任何回复
 				if wait_active_resp {
+					log::warn!("没有收到激活消息。退出。id:{}", self.id);
 					return;
 				}
 
@@ -204,7 +205,6 @@ impl Channel {
 			tokio::select! {
 				biased;
 				msg = entity_to_channel_priority_rx.recv(),if curr_tx < self.tx_limit => {
-					wait_active_resp = false;
 					idle_count = 0;
 					match msg {
 						Some(mut send) => {
@@ -233,7 +233,6 @@ impl Channel {
 					}
 				}
 				msg = entity_to_channel_common_rx.recv(),if curr_tx < self.tx_limit => {
-					wait_active_resp = false;
 					idle_count = 0;
 					match msg {
 						Some(mut send) => {
@@ -265,23 +264,25 @@ impl Channel {
 				  match msg {
 				    Some(Ok(mut json)) => {
 							log::info!("{}通道收到消息:{}",self.id,&json);
-							// let ty = json[MSG_TYPE_STR].as_str().unwrap_or("").into();
+							wait_active_resp = false;
+							let ty = json[MSG_TYPE_STR].as_str().unwrap_or("").into();
 
-							// match ty {
-							// 	MsgType::Submit => {
-							// 		//当消息需要需要返回的才记录接收数量
-							// 		curr_rx = curr_rx + 1;
-							// 	}
-							// 	MsgType::Terminate => {
-							// 		//收到终止消息。将ID带上
-							// 		json[ID] = self.id.into();
-							// 	}
-							// 	_ => {}//这里目前不用做处理
-							// };
+							match ty {
+								MsgType::Submit => {
+									//当消息需要需要返回的才记录接收数量
+									curr_rx = curr_rx + 1;
+								}
+								MsgType::Terminate => {
+									//收到终止消息。将ID带上
+									json[ID] = self.id.into();
+								}
+								_ => {
+									//这里目前不用做处理
+								}
+							}
 
 							//只有发送短信才进行判断
-              if  curr_rx <= self.rx_limit {
-								curr_rx = curr_rx + 1;
+              if ty != MsgType::Submit || curr_rx <= self.rx_limit {
 								//生成回执...当收到的是回执才回返回Some.
 								if let Some(resp) = self.protocol.encode_receipt(SmsStatus::Success, &mut json) {
 									if let Err(e) = framed.send(resp).await {
@@ -462,9 +463,9 @@ impl Channel {
 	}
 }
 
-
 impl Drop for Channel {
 	fn drop(&mut self) {
+		log::debug!("连接断开，发送退出。id:{}", self.id);
 		//发送连接断开消息。
 		let dis = json::object! {
 			msg_type:"Terminate",
