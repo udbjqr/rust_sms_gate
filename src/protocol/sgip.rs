@@ -365,7 +365,7 @@ impl ProtocolImpl for Sgip {
 		Ok(dst)
 	}
 
-	fn encode_active_test(&self, json: &mut JsonValue) -> Result<BytesMut, Error> {
+	fn encode_active_test(&self, _json: &mut JsonValue) -> Result<BytesMut, Error> {
 		Ok(BytesMut::with_capacity(0))
 	}
 

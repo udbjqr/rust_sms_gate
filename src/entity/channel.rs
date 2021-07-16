@@ -279,7 +279,7 @@ impl Channel {
 								_ => {
 									//这里目前不用做处理
 								}
-							}
+							};
 
 							//只有发送短信才进行判断
               if ty != MsgType::Submit || curr_rx <= self.rx_limit {
