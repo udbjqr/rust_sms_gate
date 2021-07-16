@@ -77,7 +77,6 @@ impl EntityManager {
 			.set("bootstrap.servers", config["bootstrap"]["servers"].as_str().unwrap().to_owned())
 			.set("session.timeout.ms", "6000")
 			.set("auto.offset.reset", "earliest")
-			// Commit automatically every 5 seconds.
 			.set("enable.auto.commit", "true")
 			.set("auto.commit.interval.ms", "2000")
 			// .set("enable.auto.offset.store", "false")

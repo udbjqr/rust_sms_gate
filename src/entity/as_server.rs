@@ -34,7 +34,9 @@ pub struct ServerEntity {
 	service_id: String,
 	sp_id: String,
 	gateway_login_name: String,
-	gateway_password: String
+	gateway_password: String,
+	//服务器可以连接过来的数量
+	server_connect_number: usize,
 }
 
 impl ServerEntity {
@@ -56,6 +58,10 @@ impl ServerEntity {
 	           send_to_manager_tx: mpsc::Sender<JsonValue>,
 	) -> Self {
 		let protocol = Protocol::get_protocol(protocol.as_str(), version);
+		let server_connect_number = match protocol {
+			Protocol::SGIP(_) => 1,
+			_ => 0,
+		};
 
 		ServerEntity {
 			id,
@@ -77,6 +83,7 @@ impl ServerEntity {
 			protocol,
 			gateway_login_name,
 			gateway_password,
+			server_connect_number,
 		}
 	}
 	///开启一个entity的启动。连接对端,准备接收数据等
@@ -155,7 +162,7 @@ impl ServerEntity {
 #[async_trait]
 impl Entity for ServerEntity {
 	async fn login_attach(&self) -> (usize, SmsStatus, u32, u32, Option<mpsc::Receiver<JsonValue>>, Option<mpsc::Receiver<JsonValue>>, Option<mpsc::Sender<JsonValue>>) {
-		if self.max_channel_number <= self.now_channel_number.load(Ordering::Relaxed) as usize {
+		if (self.max_channel_number + self.server_connect_number) <= self.now_channel_number.load(Ordering::Relaxed) as usize {
 			log::warn!("当前已经满。不再继续增加。entity_id:{},最大可用:{},实际已经:{}", self.id, self.max_channel_number, self.now_channel_number.load(Ordering::Relaxed));
 			return (0, SmsStatus::OtherError, 0, 0, None, None, None);
 		}

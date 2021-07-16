@@ -28,6 +28,7 @@ pub static PASSWORD: &'static str = "password";
 pub static ADDRESS: &'static str = "gatewayIp";
 pub static LOGIN_NAME: &'static str = "loginName";
 pub static STATE: &'static str = "state";
+pub static CAN_WRITE: &'static str = "can_write";
 pub static SUBMIT_TIME: &'static str = "submit_time";
 pub static SMSC_SEQUENCE: &'static str = "smsc_sequence";
 pub static DONE_TIME: &'static str = "done_time";

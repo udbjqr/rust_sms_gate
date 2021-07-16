@@ -7,7 +7,7 @@ use bytes::{Buf, BufMut, Bytes, BytesMut};
 use chrono::{Datelike, Local};
 use json::JsonValue;
 use tokio::time::Instant;
-use crate::{get_runtime, protocol::{cmpp32::Cmpp32, names::{DEST_ID, DEST_IDS, LONG_SMS_NOW_NUMBER, LONG_SMS_TOTAL, MSG_CONTENT, MSG_ID, MSG_IDS, SRC_ID}}};
+use crate::{get_runtime, protocol::{Sgip, SmsStatus, cmpp32::Cmpp32, implements::{cmpp_msg_id_u64_to_str, sgip_msg_id_str_to_u64, sgip_msg_id_u64_to_str}, names::{DEST_ID, DEST_IDS, LONG_SMS_NOW_NUMBER, LONG_SMS_TOTAL, MSG_CONTENT, MSG_ID, MSG_IDS, SRC_ID}}};
 use tokio::time;
 use crate::protocol::Protocol::SMGP;
 use crate::protocol::smgp::Smgp30;
@@ -134,4 +134,44 @@ fn test_smgp_long(){
 
 
 	println!("{:X}",buf);
+}
+
+#[test]
+fn test_sgip_conn(){
+	let mut buf = BytesMut::with_capacity(0);
+
+	buf.put_u32(0x00000001);
+	buf.put_u64(0xB46DE15F2AAFC0E9);
+	buf.put_u64(0x0000000102616363);
+	buf.put_u64(0x6F756E7400000000);
+	buf.put_u64(0x0000000000706173);
+	buf.put_u64(0x73776F7264000000);
+	buf.put_u64(0x0000000000000000);
+	buf.put_u64(0x00000000);
+	buf.put_u8(0x00);
+
+	let c = Sgip::new(); 
+
+
+	let tp = buf.get_u32();
+	let seq = buf.get_u32();
+
+
+	let mut json = c.decode_connect(&mut buf, seq, tp).unwrap();
+	println!("{:?}",&json);
+
+
+ println!("{:X}",	c.encode_connect_rep(SmsStatus::Success, &mut json).unwrap());
+}
+
+
+#[test]
+fn dddddd(){
+	let d = 0xA32123;
+	let time = 0x2AAFC0E9;
+	let id   = 0x0001u32;
+	let msg_id = sgip_msg_id_u64_to_str(d,time,id);
+
+	let  cc = sgip_msg_id_str_to_u64(msg_id.as_str());
+	println!("{},{:X}",cc.0,cc.1);
 }

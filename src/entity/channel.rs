@@ -12,7 +12,7 @@ use crate::get_runtime;
 use crate::protocol::{MsgType, SmsStatus::{self, MessageError, Success}, Protocol};
 use crate::protocol::names::{ADDRESS, ENTITY_ID, ID, LOGIN_NAME, MSG_TYPE_STR, STATUS, VERSION, WAIT_RECEIPT};
 use std::time::{Instant};
-use std::net::{IpAddr, SocketAddr};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use crate::global::{message_sender, TOPIC_TO_B_FAILURE};
 
 #[derive(Debug)]
@@ -128,7 +128,14 @@ impl Channel {
 	pub async fn start_server(&mut self, stream: TcpStream) {
 		info!("启动Channel.准备接受连接。");
 
-		let ip_addr = stream.peer_addr().unwrap().ip();
+		let ip_addr = match stream.peer_addr(){
+    	Ok(addr) => addr.ip(),
+    	Err(e) => {
+				log::error!("得到IP地址出现错误。e:{}", e);
+				IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0))
+			}
+		};
+
 		let mut framed = Framed::new(stream, self.protocol.clone());
 		if self.need_approve {
 			if let Err(e) = self.wait_conn(&mut framed, ip_addr).await {

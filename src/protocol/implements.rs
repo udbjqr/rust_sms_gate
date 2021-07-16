@@ -1017,6 +1017,42 @@ pub fn cmpp_msg_id_u64_to_str(mut msg_id: u64) -> String {
 	res
 }
 
+
+pub fn sgip_msg_id_str_to_u64(msg_id: &str) -> (u32, u64) {
+	let mut node_id = 0u32;
+	for mut b in msg_id[0..8].bytes() {
+		if b >= 65 && b <= 70 {
+			b -= 55;
+		} else {
+			b -= 48;
+		}
+
+		node_id = node_id << 4 | (b as u32);
+	}
+
+	let time: u64 = msg_id[8..18].parse().unwrap_or(0);
+
+	let mut seq_id = 0u64;
+	for mut b in msg_id[18..].bytes() {
+		if b >= 65 && b <= 70 {
+			b -= 55;
+		} else {
+			b -= 48;
+		}
+
+		seq_id = seq_id << 4 | (b as u64);
+	}
+
+	(node_id,time << 32 | seq_id)
+}
+
+pub fn sgip_msg_id_u64_to_str(node_id: u32,seq_id: u64) -> String {
+	let id = seq_id & 0xffff;
+	let time = seq_id >> 8;
+	format!("{:08X}{:010}{:08X}", node_id, time, id)
+}
+
+
 pub fn cmpp_msg_id_str_to_u64(msg_id: &str) -> u64 {
 	if msg_id.is_empty() {
 		return create_cmpp_msg_id(1);

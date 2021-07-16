@@ -8,7 +8,7 @@ appenders:
       kind: compound # 默认值, 即使用所有 policy
       trigger: # 当文件超过10mb 时触发 rotate
         kind: size
-        limit: 100mb
+        limit: 1000mb
       roller: # rotate 类型
         kind: fixed_window
         pattern: "log/all_log-{}.gzip" # 注意, 需要至少包含 "{}" 用于插入索引值
@@ -24,7 +24,7 @@ appenders:
       kind: compound # 默认值, 即使用所有 policy
       trigger: # 当文件超过10mb 时触发 rotate
         kind: size
-        limit: 100mb
+        limit: 1000mb
       roller: # rotate 类型
         kind: fixed_window
         pattern: "log/entity_log-{}.gzip" # 注意, 需要至少包含 "{}" 用于插入索引值
@@ -40,7 +40,7 @@ appenders:
       kind: compound # 默认值, 即使用所有 policy
       trigger: # 当文件超过10mb 时触发 rotate
         kind: size
-        limit: 100mb
+        limit: 1000mb
       roller: # rotate 类型
         kind: fixed_window
         pattern: "log/channel_log-{}.gzip" # 注意, 需要至少包含 "{}" 用于插入索引值
@@ -56,7 +56,7 @@ appenders:
       kind: compound # 默认值, 即使用所有 policy
       trigger: # 当文件超过10mb 时触发 rotate
         kind: size
-        limit: 100mb
+        limit: 1000mb
       roller: # rotate 类型
         kind: fixed_window
         pattern: "log/protocol_log-{}.gzip" # 注意, 需要至少包含 "{}" 用于插入索引值

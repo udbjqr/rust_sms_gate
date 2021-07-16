@@ -8,13 +8,14 @@ use tokio_util::codec::{Decoder, LengthDelimitedCodec};
 
 use crate::protocol::{SmsStatus};
 use crate::protocol::msg_type::MsgType;
-use crate::protocol::implements::{ProtocolImpl, fill_bytes_zero, copy_to_bytes, get_time, load_utf8_string, decode_msg_content};
-use crate::protocol::names::{LOGIN_NAME, PASSWORD,  MSG_TYPE_U32, SEQ_ID, STATUS, MSG_CONTENT, SERVICE_ID, SP_ID, SRC_ID, DEST_IDS, SEQ_IDS, MSG_FMT, DEST_ID, STATE, RESP_NODE_ID, ERROR_CODE, RESP_SEQ_ID};
+use crate::protocol::implements::{ProtocolImpl, fill_bytes_zero, get_time, load_utf8_string, decode_msg_content};
+use crate::protocol::names::{LOGIN_NAME, PASSWORD, MSG_TYPE_U32, SEQ_ID, STATUS, MSG_CONTENT, SERVICE_ID, SP_ID, SRC_ID, DEST_IDS, SEQ_IDS, MSG_FMT, DEST_ID, STATE, RESP_NODE_ID, ERROR_CODE, RESP_SEQ_ID};
 use crate::global::get_sequence_id;
 use crate::protocol::msg_type::MsgType::{Connect, SubmitResp};
 use crate::global::FILL_ZERO;
 
-use super::implements::encode_msg_content;
+use super::implements::{encode_msg_content, sgip_msg_id_str_to_u64, sgip_msg_id_u64_to_str};
+use super::names::{CAN_WRITE, MSG_ID, PASSAGE_MSG_ID, VERSION};
 
 ///Sgip协议的处理
 #[derive(Debug, Default)]
@@ -45,8 +46,8 @@ impl ProtocolImpl for Sgip {
 			MsgType::QueryResp => 0x80000007,
 			MsgType::Cancel => 0x00000008,
 			MsgType::CancelResp => 0x80000008,
-			MsgType::ActiveTest => 0x00000006,
-			MsgType::ActiveTestResp => 0x80000006,
+			MsgType::ActiveTest => 0x00000009,
+			MsgType::ActiveTestResp => 0x80000009,
 			MsgType::UNKNOWN => 0,
 			_ => 0
 		}
@@ -68,8 +69,8 @@ impl ProtocolImpl for Sgip {
 			0x80000007 => MsgType::QueryResp,
 			0x00000008 => MsgType::Cancel,
 			0x80000008 => MsgType::CancelResp,
-			0x00000006 => MsgType::ActiveTest,
-			0x80000006 => MsgType::ActiveTestResp,
+			0x00000009 => MsgType::ActiveTest,
+			0x80000009 => MsgType::ActiveTestResp,
 			_ => MsgType::UNKNOWN,
 		}
 	}
@@ -169,8 +170,7 @@ impl ProtocolImpl for Sgip {
 		dst.put_u32(self.get_type_id(MsgType::ConnectResp));
 
 		dst.put_u32(node_id);
-		dst.put_u32(get_time());
-		dst.put_u32(get_sequence_id(1)); //seq_id
+		dst.put_u64(json[SEQ_ID].as_u64().unwrap_or(0));//seq_id
 
 		dst.put_u8(self.get_status_id(&status) as u8); //Result
 		dst.extend_from_slice(&FILL_ZERO[0..8]);//Reserve
@@ -180,18 +180,10 @@ impl ProtocolImpl for Sgip {
 
 
 	fn encode_submit_resp(&self, status: SmsStatus, json: &mut JsonValue) -> Option<BytesMut> {
-		let seq_id = match json[SEQ_ID].as_u64() {
-			Some(v) => v,
+		let msg_id = match json[MSG_ID].as_str() {
+			Some(v) => sgip_msg_id_str_to_u64(v),
 			None => {
-				log::error!("没有seq_id.退出..json:{}", json);
-				return None;
-			}
-		};
-
-		let _node_id = match json[SP_ID].as_u32() {
-			Some(v) => v,
-			None => {
-				log::error!("没有node_id.退出..json:{}", json);
+				log::error!("没有MSG_ID.退出..json:{}", json);
 				return None;
 			}
 		};
@@ -200,7 +192,8 @@ impl ProtocolImpl for Sgip {
 		let mut buf = BytesMut::with_capacity(29);
 		buf.put_u32(29);
 		buf.put_u32(self.get_type_id(SubmitResp));
-		buf.put_u64(seq_id);
+		buf.put_u32(msg_id.0);
+		buf.put_u64(msg_id.1);
 		buf.put_u8(status as u8);
 		buf.extend_from_slice(&FILL_ZERO[0..8]); //Reserve
 
@@ -208,30 +201,21 @@ impl ProtocolImpl for Sgip {
 	}
 
 	fn encode_report_resp(&self, status: SmsStatus, json: &mut JsonValue) -> Option<BytesMut> {
-		let seq_id = match json[SEQ_ID].as_u64() {
-			Some(v) => v,
+		let msg_id = match json[MSG_ID].as_str() {
+			Some(v) => sgip_msg_id_str_to_u64(v),
 			None => {
-				log::error!("没有seq_id.退出..json:{}", json);
-				return None;
-			}
-		};
-
-		let _node_id = match json[SP_ID].as_u32() {
-			Some(v) => v,
-			None => {
-				log::error!("没有node_id.退出..json:{}", json);
+				log::error!("没有MSG_ID.退出..json:{}", json);
 				return None;
 			}
 		};
 
 		let status = self.get_status_id(&status);
-
-
 		let mut buf = BytesMut::with_capacity(29);
 
 		buf.put_u32(29);
 		buf.put_u32(self.get_type_id(SubmitResp));
-		buf.put_u64(seq_id);
+		buf.put_u32(msg_id.0);
+		buf.put_u64(msg_id.1);
 		buf.put_u8(status as u8);
 		buf.extend_from_slice(&FILL_ZERO[0..8]); //Reserve
 
@@ -239,31 +223,21 @@ impl ProtocolImpl for Sgip {
 	}
 
 	fn encode_deliver_resp(&self, status: SmsStatus, json: &mut JsonValue) -> Option<BytesMut> {
-		let seq_id = match json[SEQ_ID].as_u64() {
-			Some(v) => v,
+		let msg_id = match json[MSG_ID].as_str() {
+			Some(v) => sgip_msg_id_str_to_u64(v),
 			None => {
-				log::error!("没有seq_id.退出..json:{}", json);
+				log::error!("没有MSG_ID.退出..json:{}", json);
 				return None;
 			}
 		};
-
-		let node_id = match json[SP_ID].as_u32() {
-			Some(v) => v,
-			None => {
-				log::error!("没有node_id.退出..json:{}", json);
-				return None;
-			}
-		};
-
 
 		let status = self.get_status_id(&status);
-
 		let mut buf = BytesMut::with_capacity(29);
 
 		buf.put_u32(29);
 		buf.put_u32(self.get_type_id(MsgType::DeliverResp));
-		buf.put_u32(node_id);
-		buf.put_u64(seq_id);
+		buf.put_u32(msg_id.0);
+		buf.put_u64(msg_id.1);
 		buf.put_u32(status);
 		buf.extend_from_slice(&FILL_ZERO[0..8]); //Reserve
 
@@ -294,28 +268,20 @@ impl ProtocolImpl for Sgip {
 	}
 
 	fn encode_report(&self, json: &mut JsonValue) -> Result<BytesMut, Error> {
-		let node_id = match json[SP_ID].as_u32() {
-			Some(v) => v,
+		let msg_id = match json[MSG_ID].as_str() {
 			None => {
-				log::error!("没有node_id.退出..json:{}", json);
-				return Err(io::Error::new(io::ErrorKind::NotFound, "node_id"));
+				log::error!("没有msg_id字串.退出..json:{}", json);
+				return Err(io::Error::new(io::ErrorKind::NotFound, "没有msg_id字串"));
 			}
+			Some(v) => sgip_msg_id_str_to_u64(v)
 		};
 
-		let resp_node_id = match json[RESP_NODE_ID].as_u32() {
-			Some(v) => v,
+		let pass_msg_id = match json[PASSAGE_MSG_ID].as_str() {
 			None => {
-				log::error!("没有resp_node_id.退出..json:{}", json);
-				return Err(io::Error::new(io::ErrorKind::NotFound, "resp_node_id"));
+				log::error!("没有PASSAGE_MSG_ID字串.退出..json:{}", json);
+				return Err(io::Error::new(io::ErrorKind::NotFound, "没有PASSAGE_MSG_ID字串"));
 			}
-		};
-
-		let resp_seq_id = match json[RESP_SEQ_ID].as_u64() {
-			Some(v) => v,
-			None => {
-				log::error!("没有resp_seq_id.退出..json:{}", json);
-				return Err(io::Error::new(io::ErrorKind::NotFound, "resp_seq_id"));
-			}
+			Some(v) => sgip_msg_id_str_to_u64(v)
 		};
 
 		let stat = match json[STATE].as_u8() {
@@ -347,14 +313,14 @@ impl ProtocolImpl for Sgip {
 
 		dst.put_u32(64);
 		dst.put_u32(self.get_type_id(MsgType::Report));
-		dst.put_u32(node_id);
-		let seq_id = (get_time() as u64) << 32 | get_sequence_id(1) as u64;
+		dst.put_u32(pass_msg_id.0);
+		dst.put_u64(pass_msg_id.1);
+		
 		let mut seq_ids = Vec::with_capacity(1);
-		seq_ids.push(seq_id);
-		dst.put_u64(seq_id);
+		seq_ids.push(msg_id.1);
 
-		dst.put_u32(resp_node_id);
-		dst.put_u64(resp_seq_id); //SubmitSequenceNumber 12 这2行
+		dst.put_u32(msg_id.0);
+		dst.put_u64(msg_id.1); //这个对应之前客户给过来的submit的msgId
 		dst.put_u8(0);//ReportType
 		fill_bytes_zero(&mut dst, src_id, 21);//UserNumber 21
 		dst.put_u8(stat);//State
@@ -366,7 +332,8 @@ impl ProtocolImpl for Sgip {
 	}
 
 	fn encode_active_test(&self, _json: &mut JsonValue) -> Result<BytesMut, Error> {
-		Ok(BytesMut::with_capacity(0))
+		let dst = BytesMut::with_capacity(0);
+		Ok(dst)
 	}
 
 	fn encode_deliver(&self, json: &mut JsonValue) -> Result<BytesMut, Error> {
@@ -497,16 +464,16 @@ impl ProtocolImpl for Sgip {
 			}
 		};
 
-		let corp_id:String = match json[SP_ID].as_u32() {
-			Some(v) => v.to_string(),
+		let corp_id:String = match json[SP_ID].as_str() {
+			Some(v) => v.to_owned(),
 			None => {
 				log::error!("没有sp_id.退出..json:{}", json);
 				return Err(io::Error::new(io::ErrorKind::NotFound, "没有sp_id"));
 			}
 		};
 
-		let node_id = match json[SP_ID].as_u32() {
-			Some(v) => v,
+		let node_id = match json[SP_ID].as_str() {
+			Some(v) => v.parse().unwrap_or(0),
 			None => {
 				log::error!("没有node_id.退出..json:{}", json);
 				return Err(io::Error::new(io::ErrorKind::NotFound, "没有node_id"));
@@ -615,7 +582,9 @@ impl ProtocolImpl for Sgip {
 
 		json[MSG_TYPE_U32] = tp.into();
 		json[SP_ID] = node_id.into();
-		json[SEQ_ID] = buf.get_u64().into();
+		let seq_id = buf.get_u64();
+		json[SEQ_ID] = seq_id.into();
+		json[MSG_ID] = sgip_msg_id_u64_to_str(node_id, seq_id).into(); 
 
 		json[STATUS] = buf.get_u8().into();
 
@@ -627,8 +596,9 @@ impl ProtocolImpl for Sgip {
 
 		json[MSG_TYPE_U32] = tp.into();
 		json[SP_ID] = node_id.into();
-		json[SEQ_ID] = buf.get_u64().into();
-
+		let seq_id = buf.get_u64();
+		json[SEQ_ID] = seq_id.into();
+		json[MSG_ID] = sgip_msg_id_u64_to_str(node_id, seq_id).into();
 		json[STATUS] = buf.get_u8().into();
 
 		Ok(json)
@@ -639,7 +609,9 @@ impl ProtocolImpl for Sgip {
 
 		json[MSG_TYPE_U32] = tp.into();
 		json[SP_ID] = node_id.into();
-		json[SEQ_ID] = buf.get_u64().into();
+		let seq_id = buf.get_u64();
+		json[SEQ_ID] = seq_id.into();
+		json[MSG_ID] = sgip_msg_id_u64_to_str(node_id, seq_id).into();
 
 		Ok(json)
 	}
@@ -649,7 +621,9 @@ impl ProtocolImpl for Sgip {
 
 		json[MSG_TYPE_U32] = tp.into();
 		json[SP_ID] = node_id.into();
-		json[SEQ_ID] = buf.get_u64().into();
+		let seq_id = buf.get_u64();
+		json[SEQ_ID] = seq_id.into();
+		json[MSG_ID] = sgip_msg_id_u64_to_str(node_id, seq_id).into();
 
 		json[RESP_NODE_ID] = buf.get_u32().into();
 		json[RESP_SEQ_ID] = buf.get_u64().into();
@@ -666,7 +640,9 @@ impl ProtocolImpl for Sgip {
 
 		json[MSG_TYPE_U32] = tp.into();
 		json[SP_ID] = node_id.into();
-		json[SEQ_ID] = buf.get_u64().into();
+		let seq_id = buf.get_u64();
+		json[SEQ_ID] = seq_id.into();
+		json[MSG_ID] = sgip_msg_id_u64_to_str(node_id, seq_id).into();
 
 		json[SRC_ID] = load_utf8_string(buf, 21).into(); // dest_terminal_id
 		json[DEST_ID] = load_utf8_string(buf, 21).into(); //dest_id 21
@@ -685,7 +661,9 @@ impl ProtocolImpl for Sgip {
 
 		json[MSG_TYPE_U32] = tp.into();
 		json[SP_ID] = node_id.into();
-		json[SEQ_ID] = buf.get_u64().into();
+		let seq_id = buf.get_u64();
+		json[SEQ_ID] = seq_id.into();
+		json[MSG_ID] = sgip_msg_id_u64_to_str(node_id, seq_id).into(); 
 
 		json[STATUS] = buf.get_u8().into();
 
@@ -697,7 +675,9 @@ impl ProtocolImpl for Sgip {
 
 		json[MSG_TYPE_U32] = tp.into();
 		json[SP_ID] = node_id.into();
-		json[SEQ_ID] = buf.get_u64().into();
+		let seq_id = buf.get_u64();
+		json[SEQ_ID] = seq_id.into();
+		json[MSG_ID] = sgip_msg_id_u64_to_str(node_id, seq_id).into();
 
 		json[SRC_ID] = load_utf8_string(buf, 21).into(); //src_id 21
 		buf.advance(21); //ChargeNumber
@@ -727,10 +707,14 @@ impl ProtocolImpl for Sgip {
 		json[MSG_TYPE_U32] = tp.into();
 
 		json[SP_ID] = node_id.into();
-		json[SEQ_ID] = buf.get_u64().into();
-		buf.advance(1); //Login Type
-		json[LOGIN_NAME] = copy_to_bytes(buf, 16).as_ref().into();//Login Name
-		json[PASSWORD] = copy_to_bytes(buf, 16).as_ref().into(); //Login Passowrd
+		let seq_id = buf.get_u64();
+		json[SEQ_ID] = seq_id.into();
+		json[MSG_ID] = sgip_msg_id_u64_to_str(node_id, seq_id).into();
+		
+		json[CAN_WRITE] = (buf.get_u8() == 1).into();//Login Type
+		json[LOGIN_NAME] = load_utf8_string(buf, 16).into();//Login Name
+		json[PASSWORD] = load_utf8_string(buf, 16).into(); //Login Passowrd
+		json[VERSION] = 1.into();
 
 		Ok(json)
 	}
