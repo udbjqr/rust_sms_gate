@@ -265,31 +265,28 @@ impl Channel {
 				  match msg {
 				    Some(Ok(mut json)) => {
 							log::info!("{}通道收到消息:{}",self.id,&json);
-							let ty = json[MSG_TYPE_STR].as_str().unwrap_or("").into();
+							// let ty = json[MSG_TYPE_STR].as_str().unwrap_or("").into();
 
-							match ty {
-								MsgType::Submit => {
-									//当消息需要需要返回的才记录接收数量
-									curr_rx = curr_rx + 1;
-								}
-								MsgType::Terminate => {
-									//收到终止消息。将ID带上
-									json[ID] = self.id.into();
-								}
-								_ => {
-									//这里目前不用做处理
-								}
-							};
+							// match ty {
+							// 	MsgType::Submit => {
+							// 		//当消息需要需要返回的才记录接收数量
+							// 		curr_rx = curr_rx + 1;
+							// 	}
+							// 	MsgType::Terminate => {
+							// 		//收到终止消息。将ID带上
+							// 		json[ID] = self.id.into();
+							// 	}
+							// 	_ => {}//这里目前不用做处理
+							// };
 
 							//只有发送短信才进行判断
-              if ty != MsgType::Submit || curr_rx <= self.rx_limit {
+              if  curr_rx <= self.rx_limit {
+								curr_rx = curr_rx + 1;
 								//生成回执...当收到的是回执才回返回Some.
 								if let Some(resp) = self.protocol.encode_receipt(SmsStatus::Success, &mut json) {
 									if let Err(e) = framed.send(resp).await {
 										error!("发送回执出现错误, e:{}", e);
 									}
-								} else {
-									error!("生成回执失败。。。")
 								}
 								
 								//向实体对象发送消息准备进行处理
