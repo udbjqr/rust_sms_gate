@@ -91,7 +91,7 @@ pub fn get_runtime() -> Arc<Runtime> {
 				.thread_name_fn(|| {
 					static ATOMIC_ID: AtomicUsize = AtomicUsize::new(0);
 					let id = ATOMIC_ID.fetch_add(1, Ordering::SeqCst);
-					format!("工作{}", id)
+					format!("w_{}", id)
 				})
 				.thread_stack_size(5 * 1024 * 1024)
 				.enable_all()

@@ -1,5 +1,5 @@
-# Scan this file for changes every 30 seconds
-refresh_rate: 30 seconds
+
+refresh_rate: 30 seconds # Scan this file for changes every 30 seconds
 
 appenders:
   all:
@@ -11,12 +11,12 @@ appenders:
         limit: 1000mb
       roller: # rotate 类型
         kind: fixed_window
-        pattern: "log/all_log-{}.gzip" # 注意, 需要至少包含 "{}" 用于插入索引值
+        pattern: "log/all_log-{}.gz" # 注意, 需要至少包含 "{}" 用于插入索引值
         base: 0 # 压缩日志索引值起点
-        count: 200 # 最大保存压缩文件数
+        count: 100 # 最大保存压缩文件数
     path: "log/all.log"
     encoder:
-      pattern: "{d(%X%.6f)} [{l}] t:{T} {L} - {m}{n}"
+      pattern: "{d(%X%.6f)} [{l}] t:{T} {f}:{L} - {m}{n}"
 
   entity:
     kind: rolling_file
@@ -27,12 +27,12 @@ appenders:
         limit: 1000mb
       roller: # rotate 类型
         kind: fixed_window
-        pattern: "log/entity_log-{}.gzip" # 注意, 需要至少包含 "{}" 用于插入索引值
+        pattern: "log/entity_log-{}.gz" # 注意, 需要至少包含 "{}" 用于插入索引值
         base: 0 # 压缩日志索引值起点
-        count: 200 # 最大保存压缩文件数
+        count: 100 # 最大保存压缩文件数
     path: "log/entity.log"
     encoder:
-      pattern: "{d(%X%.6f)} [{l}] t:{T} {L} - {m}{n}"
+      pattern: "{d(%X%.6f)} [{l}] t:{T} {f}:{L} - {m}{n}"
 
   channel:
     kind: rolling_file
@@ -43,12 +43,12 @@ appenders:
         limit: 1000mb
       roller: # rotate 类型
         kind: fixed_window
-        pattern: "log/channel_log-{}.gzip" # 注意, 需要至少包含 "{}" 用于插入索引值
+        pattern: "log/channel_log-{}.gz" # 注意, 需要至少包含 "{}" 用于插入索引值
         base: 0 # 压缩日志索引值起点
-        count: 200 # 最大保存压缩文件数
+        count: 100 # 最大保存压缩文件数
     path: "log/channel.log"
     encoder:
-      pattern: "{d(%X%.6f)} [{l}] t:{T} {L} - {m}{n}"
+      pattern: "{d(%X%.6f)} [{l}] t:{T} {f}:{L} - {m}{n}"
 
   protocol:
     kind: rolling_file
@@ -59,15 +59,12 @@ appenders:
         limit: 1000mb
       roller: # rotate 类型
         kind: fixed_window
-        pattern: "log/protocol_log-{}.gzip" # 注意, 需要至少包含 "{}" 用于插入索引值
+        pattern: "log/protocol_log-{}.gz" # 注意, 需要至少包含 "{}" 用于插入索引值
         base: 0 # 压缩日志索引值起点
-        count: 200 # 最大保存压缩文件数
+        count: 100 # 最大保存压缩文件数
     path: "log/protocol.log"
     encoder:
-      pattern: "{d(%X%.6f)} [{l}] t:{T} {L} - {m}{n}"
-
-
-#pattern: "{d(%X%.6f)} [{l}] t:{T} {f}:{L} - {m}{n}"
+      pattern: "{d(%X%.6f)} [{l}] t:{T} {f}:{L} - {m}{n}"
 
 loggers:
   sms_gate::entity::channel:

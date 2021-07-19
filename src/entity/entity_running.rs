@@ -497,7 +497,7 @@ async fn send_to_channels(msg: JsonValue, context: &mut EntityRunContext) {
 			context.index = 1;
 		}
 		context.index += 1;
-		
+
 		match context.send_channels.get(context.index % context.send_channels.len()) {
 			Some(select) => {
 				if select.can_write {
@@ -522,7 +522,7 @@ async fn send_to_channels(msg: JsonValue, context: &mut EntityRunContext) {
 				continue;
 			}
 		};
-		
+
 		//当某一个通道端已经退出了，将对应的也退出
 		if let Some((json, channel_id)) = failure {
 			context.send_channels.retain(|item| item.id != channel_id);

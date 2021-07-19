@@ -18,7 +18,7 @@ use super::implements::{encode_msg_content, sgip_msg_id_str_to_u64, sgip_msg_id_
 use super::names::{CAN_WRITE, MSG_ID, PASSAGE_MSG_ID, VERSION};
 
 ///Sgip协议的处理
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Sgip {
 	version: u32,
 	length_codec: LengthDelimitedCodec,
@@ -726,6 +726,12 @@ impl Clone for Sgip {
 	}
 }
 
+impl Default for Sgip {
+	fn default() -> Sgip {
+		Sgip::new()
+	}
+}
+
 impl Sgip {
 	pub fn new() -> Self {
 		Sgip {
@@ -737,4 +743,4 @@ impl Sgip {
 				.new_codec(),
 		}
 	}
-}
+}	
