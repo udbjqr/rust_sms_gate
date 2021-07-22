@@ -297,7 +297,6 @@ impl Channel {
               if ty != MsgType::Submit || curr_rx <= self.rx_limit {
 								//生成回执...当收到的是回执才回返回Some.
 								if let Some(resp) = self.protocol.encode_receipt(SmsStatus::Success, &mut json) {
-									log::info!("{}向对端发送消息{}", self.id, &json);
 									if let Err(e) = framed.send(resp).await {
 										error!("发送回执出现错误, e:{}", e);
 									}
@@ -313,7 +312,6 @@ impl Channel {
 								if let Some(resp) = self.protocol.encode_receipt(SmsStatus::TrafficRestrictions, &mut json) {
 									log::debug!("当前超出流量.json:{}.已发:{}.可发:{}", json, curr_rx, self.rx_limit);
 
-									log::info!("{}向对端发送消息{}", self.id, &json);
 									if let Err(e) = framed.send(resp).await{
 										error!("发送回执出现错误, e:{}",e);
 									}
