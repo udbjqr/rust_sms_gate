@@ -29,7 +29,7 @@ impl KafkaMessageProducer {
 
 			match producer.send(record, Timeout::Never).await {
 				Ok(_) => {
-					log::trace!("向消息队列发送消息.topic:{},key:{},msg:{}", topic, key, msg);
+					log::info!("向消息队列发送消息.topic:{},key:{},msg:{}", topic, key, msg);
 				}
 				Err((error, message)) => {
 					error!("kafka发送消息失败:e:{},topic:{}.message:{:?}", error, topic, message);

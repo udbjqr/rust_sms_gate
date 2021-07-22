@@ -136,7 +136,7 @@ pub async fn start_server(from_servers: StreamConsumer) {
 					Ok(msg) => {
 						let body = match msg.payload_view::<str>() {
 							Some(Ok(body)) => {
-								debug!("收到消息:topic:{},msg:{}",msg.topic(), body);
+								info!("收到business消息:topic:{},msg:{}",msg.topic(), body);
 								body
 							},
 							Some(Err(e)) => {

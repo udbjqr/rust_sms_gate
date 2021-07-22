@@ -90,7 +90,7 @@ Receiver<JsonValue>, mut from_channel: mpsc::Receiver<JsonValue>, entity_id: u32
 						state: 0
 					},
 	};
-	log::trace!("新开始一个entity.{}", context);
+	log::info!("新开始一个entity.{}", context);
 
 	let mut clear_msg_timestamp = chrono::Local::now().timestamp();
 	let clear_msg_duration = 86400 * 4;
@@ -171,7 +171,7 @@ async fn handle_from_channel_rx(msg: Option<JsonValue>, context: &mut EntityRunC
 			return false;
 		}
 		Some(mut msg) => {
-			log::trace!("收到通道发来消息。id:{}.msg:{}", context.entity_id, msg);
+			log::trace!("entity收到channle发来消息。id:{}.msg:{}", context.entity_id, msg);
 			msg[RECEIVE_TIME] = chrono::Local::now().timestamp().into();
 			msg[ENTITY_ID] = context.entity_id.into();
 
@@ -259,7 +259,7 @@ async fn handle_from_channel_rx(msg: Option<JsonValue>, context: &mut EntityRunC
 							}
 						}
 						(MsgType::Terminate, _) => {
-							log::debug!("通道关闭操作。msg:{}", msg);
+							log::info!("通道关闭操作。msg:{}", msg);
 
 							let id = match msg[ID].as_usize() {
 								None => {
@@ -283,7 +283,7 @@ async fn handle_from_channel_rx(msg: Option<JsonValue>, context: &mut EntityRunC
 						}
 						//有通道连接上了
 						(MsgType::Connect, _) => {
-							log::trace!("有通道连接上了.msg:{}", msg);
+							log::info!("有通道连接上了.msg:{}", msg);
 							if let Some(ind) = msg["channel_id"].as_u32() {
 								let mut save = TEMP_SAVE.write().await;
 								if let Some((entity_to_channel_priority_tx, entity_to_channel_common_tx)) = save.remove(&ind) {
@@ -447,7 +447,7 @@ async fn handle_from_manager_rx(msg: Option<JsonValue>, context: &mut EntityRunC
 					send_to_channels(msg, context).await;
 				}
 				Some("passage.request.state") => {
-					log::trace!("收到需要状态的消息。id:{}", context.entity_id);
+					log::info!("收到需要状态的消息。id:{}", context.entity_id);
 
 					send_entity_state(context).await;
 				}
@@ -487,7 +487,7 @@ async fn send_to_channels(msg: JsonValue, context: &mut EntityRunContext) {
 		send_msg[SERVICE_ID] = context.service_id.as_str().into();
 	}
 
-	log::trace!("选择一个可用的channel发送.id:{}..现有通道数:{},msg:{}", context.entity_id, context.send_channels.len(),&send_msg);
+	log::debug!("选择一个可用的channel发送.id:{}..现有通道数:{},msg:{}", context.entity_id, context.send_channels.len(),&send_msg);
 
 	let mut failure: Option<(JsonValue, usize)> = None;
 	let size = context.send_channels.len();

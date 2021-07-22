@@ -69,7 +69,7 @@ pub trait Entity: Send + Sync + Debug {
 
 ///检查ip地址是否在允许的范围内。true 在。false 不在
 fn check_addr_range(allow_ips: &str, now_ip: IpAddr) -> bool {
-	log::trace!("进行地址检查.来源地址:{}..允许的地址.{}", now_ip, allow_ips);
+	log::debug!("进行地址检查.来源地址:{}..允许的地址.{}", now_ip, allow_ips);
 	//ipv6目前不处理。
 	let ip_v = match now_ip {
 		IpAddr::V4(ip) => {
