@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use json::JsonValue;
-use log::{debug, error, info};
+use log::{error, info};
 use rdkafka::{ClientConfig, Message};
 use rdkafka::config::RDKafkaLogLevel;
 use rdkafka::consumer::{Consumer, StreamConsumer};

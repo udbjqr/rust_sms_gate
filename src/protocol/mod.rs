@@ -310,7 +310,7 @@ impl Encoder<BytesMut> for Protocol {
 	type Error = io::Error;
 
 	fn encode(&mut self, item: BytesMut, dst: &mut BytesMut) -> Result<(), Self::Error> {
-		dst.extend_from_slice(&item);
+		*dst = item;
 
 		log::trace!("发送的字节码..{:X}", dst);
 		Ok(())

@@ -81,7 +81,10 @@ impl Channel {
 	///连接服务器的动作
 	async fn connect(&mut self, framed: &mut Framed<TcpStream, Protocol>, entity_id: u32, mut login_msg: JsonValue, ip_addr: IpAddr) -> Result<(), io::Error> {
 		match self.protocol.encode_message(&mut login_msg) {
-			Ok(msg) => framed.send(msg).await?,
+			Ok(msg) => {
+				log::info!("{}向对端发送消息：{}", self.id, &login_msg);
+				framed.send(msg).await?;
+			}
 			Err(e) => {
 				error!("生成消息出现异常。{}", e);
 				return Err(io::Error::new(io::ErrorKind::InvalidData, e));
@@ -218,6 +221,7 @@ impl Channel {
 							log::debug!("priority收到entity发来的消息.msg:{}",send);
 							//接收发来的消息。并处理
 							if let Ok(msg) = self.protocol.encode_message(&mut send) {
+								log::info!("{}向对端发送消息{}", self.id, &send);
 								if let Err(e) = framed.send(msg).await {
 									error!("发送回执出现错误, e:{}", e);
 								} else {
@@ -246,6 +250,7 @@ impl Channel {
 							log::debug!("common收到entity发来的消息.msg:{}",send);
 							//接收发来的消息。并处理
 							if let Ok(msg) = self.protocol.encode_message(&mut send) {
+								log::info!("{}向对端发送消息{}", self.id, &send);
 								if let Err(e) = framed.send(msg).await {
 									error!("发送回执出现错误, e:{}", e);
 								} else {
@@ -292,6 +297,7 @@ impl Channel {
               if ty != MsgType::Submit || curr_rx <= self.rx_limit {
 								//生成回执...当收到的是回执才回返回Some.
 								if let Some(resp) = self.protocol.encode_receipt(SmsStatus::Success, &mut json) {
+									log::info!("{}向对端发送消息{}", self.id, &json);
 									if let Err(e) = framed.send(resp).await {
 										error!("发送回执出现错误, e:{}", e);
 									}
@@ -307,6 +313,7 @@ impl Channel {
 								if let Some(resp) = self.protocol.encode_receipt(SmsStatus::TrafficRestrictions, &mut json) {
 									log::debug!("当前超出流量.json:{}.已发:{}.可发:{}", json, curr_rx, self.rx_limit);
 
+									log::info!("{}向对端发送消息{}", self.id, &json);
 									if let Err(e) = framed.send(resp).await{
 										error!("发送回执出现错误, e:{}",e);
 									}
@@ -354,6 +361,7 @@ impl Channel {
 								info!("match_version{}", result);
 								*framed.codec_mut() = self.protocol.clone();
 								if let Some(msg) = self.protocol.encode_receipt(Success, &mut result) {
+									log::info!("{}向对端发送消息{}", self.id, &result);
 									framed.send(msg).await?;
 								}
 								self.need_approve = false;
@@ -364,6 +372,7 @@ impl Channel {
 								let name: &str = status.into();
 								result[STATUS] = name.into();
 								if let Some(msg) = self.protocol.encode_receipt(status, &mut result) {
+									log::info!("{}向对端发送消息{}", self.id, &result);
 									framed.send(msg).await?;
 								}
 
