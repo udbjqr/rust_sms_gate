@@ -26,7 +26,7 @@ pub static TOPIC_TO_B_DELIVER: &'static str = "toB.deliver";
 pub static TOPIC_TO_B_DELIVER_RESP: &'static str = "toB.deliver.response";
 pub static TOPIC_TO_B_REPORT: &'static str = "toB.report";
 pub static TOPIC_TO_B_REPORT_RESP: &'static str = "toB.deliver.response";
-pub static TOPIC_TO_B_FAILURE: &'static str = "sms.send.return.failure";
+pub static TOPIC_TO_B_FAILURE: &'static str = "sms.send.failure";
 
 
 
