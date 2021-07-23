@@ -87,7 +87,7 @@ pub fn get_runtime() -> Arc<Runtime> {
 
 			println!("init pool ~~..CPU数量:{}", thread_num);
 			Arc::new(Builder::new_multi_thread()
-				.worker_threads(thread_num * 2)
+				.worker_threads(thread_num + 2)
 				.thread_name_fn(|| {
 					static ATOMIC_ID: AtomicUsize = AtomicUsize::new(0);
 					let id = ATOMIC_ID.fetch_add(1, Ordering::SeqCst);
