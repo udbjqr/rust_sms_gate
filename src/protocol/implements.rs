@@ -953,10 +953,10 @@ pub fn smgp_msg_id_buf_to_str(buf: &BytesMut) -> String {
 }
 
 pub fn cmpp_msg_id_u64_to_str(mut msg_id: u64) -> String {
-	let mut us = vec![0x30u8; 21];
+	let mut us = vec![0x30u8; 22];
 
-	let mut d = msg_id & 0xffff;
-	let mut ind = 20;
+	let mut d = msg_id & 0xFFFF;
+	let mut ind = 21;
 	for _ in 0..5 {
 		us[ind] = 0x30 + (d % 10) as u8;
 		d = d / 10;
@@ -965,7 +965,7 @@ pub fn cmpp_msg_id_u64_to_str(mut msg_id: u64) -> String {
 	msg_id = msg_id >> 16;
 
 	d = msg_id & 0x3FFFFF;
-	for _ in 0..6 {
+	for _ in 0..7 {
 		us[ind] = 0x30 + (d % 10) as u8;
 		d = d / 10;
 		ind -= 1;
@@ -1010,11 +1010,9 @@ pub fn cmpp_msg_id_u64_to_str(mut msg_id: u64) -> String {
 	ind -= 1;
 	us[ind] = 0x30 + (d % 10) as u8;
 
-	let res = unsafe {
+	unsafe {
 		String::from_utf8_unchecked(us)
-	};
-
-	res
+	}
 }
 
 
@@ -1072,7 +1070,7 @@ pub fn cmpp_msg_id_str_to_u64(msg_id: &str) -> u64 {
 	let minute: u64 = minute.parse().unwrap_or(0);
 	let (second, dd) = dd.split_at(2);
 	let second: u64 = second.parse().unwrap_or(0);
-	let (ismg_id, seq_id) = dd.split_at(6);
+	let (ismg_id, seq_id) = dd.split_at(7);
 	let ismg_id: u64 = ismg_id.parse().unwrap_or(0);
 	let seq_id: u64 = seq_id.parse().unwrap_or(0);
 
@@ -1081,7 +1079,7 @@ pub fn cmpp_msg_id_str_to_u64(msg_id: &str) -> u64 {
 	result = result << 5 | (hour & 0x1F) as u64;
 	result = result << 6 | (minute & 0x3F) as u64;
 	result = result << 6 | (second & 0x3F) as u64;
-	result = result << 22 | ismg_id as u64;
+	result = result << 22 | (ismg_id as u64 & 0x3FFFFF);
 
 	result << 16 | seq_id
 }
@@ -1094,7 +1092,7 @@ pub fn create_cmpp_msg_id(len: u32) -> u64 {
 	result = result << 5 | (date.hour() & 0x1F) as u64;
 	result = result << 6 | (date.minute() & 0x3F) as u64;
 	result = result << 6 | (date.second() & 0x3F) as u64;
-	result = result << 22 | *ISMG_ID as u64;
+	result = result << 22 | (*ISMG_ID as u64 & 0x3FFFFF);
 
 	result << 16 | (get_sequence_id(len) & 0xffff) as u64
 }

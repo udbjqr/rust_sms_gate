@@ -23,22 +23,22 @@ fn main() {
 
 	get_runtime().spawn(async move {
 		// let addr = "221.228.32.44:9002".parse().unwrap();
-		let addr = "150.139.139.130:5020".parse().unwrap();
+		let addr = "47.114.180.42:5000".parse().unwrap();
 		let socket = TcpSocket::new_v4().unwrap();
 		println!("连接服务器：{:?}",socket);
 		let stream = socket.connect(addr).await.unwrap();
 
 		println!("连接服务器：{:?}",stream);
-		let mut protocol = Protocol::SMGP(Smgp30::new());
+		let mut protocol = Protocol::CMPP32(Cmpp32::new());
 		let mut framed = Framed::new(stream, protocol.clone());
 
 		let mut login_msg = json::object! {
 				// loginName: "101094",
 				// password: "aTt1ZIo^Mp^6",
-				loginName: "101016",
-				spId:106902,
-				password: "S6#j7Fgc!CXe",
-				protocolVersion: 0x12u32,
+				loginName: "166992",
+				spId:"106902",
+				password: "123456",
+				protocolVersion: 0x30u32,
 				msg_type: "Connect"
 			};
 
@@ -113,7 +113,7 @@ async fn start_work(framed: &mut Framed<TcpStream, Protocol>, protocol: Protocol
 		let json = json::object! {
 			msg_content: "【睦霖集团】验证码7232，您正在注册成为新用户，感谢您的支持！",
 			serviceId: "10683074",
-			spId: 10683074,
+			spId: "10683074",
 			src_id: "1068307411111111",
 			msg_type:"Submit",
 			dest_ids:[
@@ -122,7 +122,11 @@ async fn start_work(framed: &mut Framed<TcpStream, Protocol>, protocol: Protocol
 			msg_ids:["061614401994803057760"]
 		};
 
-		for i in 0..1 {
+		for i in 0..100000 {
+			if i  % 500 == 0 {
+				tokio::time::sleep(Duration::from_secs(1));
+			}
+
 			if let Err(e) = tx.send(json.clone()) {
 				println!("发送消息错误:{}", e);
 			}
