@@ -23,7 +23,7 @@ fn main() {
 
 	get_runtime().spawn(async move {
 		// let addr = "221.228.32.44:9002".parse().unwrap();
-		let addr = "47.114.180.42:5000".parse().unwrap();
+		let addr = "47.114.180.42:7890".parse().unwrap();
 		let socket = TcpSocket::new_v4().unwrap();
 		println!("连接服务器：{:?}",socket);
 		let stream = socket.connect(addr).await.unwrap();
@@ -111,18 +111,18 @@ async fn start_work(framed: &mut Framed<TcpStream, Protocol>, protocol: Protocol
 	get_runtime().spawn(async move {
 		let mut count = 0u32;
 		let json = json::object! {
-			msg_content: "【睦霖集团】验证码7232，您正在注册成为新用户，感谢您的支持！",
+			msg_content: "【睦霖集团】这个测试当重启business时，状态报告是否正常",
 			serviceId: "10683074",
 			spId: "10683074",
 			src_id: "1068307411111111",
 			msg_type:"Submit",
 			dest_ids:[
-				"18179156296"
+				"17779522835"
 			],
 			msg_ids:["061614401994803057760"]
 		};
 
-		for i in 0..100000 {
+		for i in 0..1 {
 			if i  % 500 == 0 {
 				tokio::time::sleep(Duration::from_secs(1));
 			}

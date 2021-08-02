@@ -106,6 +106,6 @@ fn test_smgp_report(){
 
 #[test]
 fn test_smgp_long(){
-
+	println!("{}",chrono::Local::now().timestamp());
 
 }

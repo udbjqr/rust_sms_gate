@@ -26,7 +26,7 @@ macro_rules! re_send {
 			let duration = v[DURATION].as_i64().unwrap_or(30i64);
 
 			//如果超时或者需要重发.
-			if receive_time + duration < now && v[NEED_RE_SEND].as_bool().unwrap_or(true) {
+			if (receive_time + duration) < now && v[NEED_RE_SEND].as_bool().unwrap_or(true) {
 				re_sends.push(v.to_owned());
 				v[DURATION] = (duration + duration).into();
 
@@ -159,7 +159,7 @@ fn clear_send_sms_cache(cache: &mut HashMap<u64, JsonValue>, duration: i64) {
 	let now = chrono::Local::now().timestamp();
 
 	cache.retain(|_key, value| {
-		value[RECEIVE_TIME].as_i64().unwrap_or(now) + duration <= now
+		value[RECEIVE_TIME].as_i64().unwrap_or(now) + duration > now
 	});
 }
 
