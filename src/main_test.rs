@@ -111,7 +111,7 @@ async fn start_work(framed: &mut Framed<TcpStream, Protocol>, protocol: Protocol
 	get_runtime().spawn(async move {
 		let mut count = 0u32;
 		let json = json::object! {
-			msg_content: "【睦霖集团】这个测试当重启business时，状态报告是否正常",
+			msg_content: "【睦霖集团】这个测试，我准备当长短信看看是否正常接收。这个测试，我准备当长短信看看是否正常接收。这个测试，我准备当长短信看看是否正常接收。这个测试，我准备当长短信看看是否正常接收。",
 			serviceId: "10683074",
 			spId: "10683074",
 			src_id: "1068307411111111",

@@ -259,6 +259,11 @@ async fn handle_queue_msg(topic: &str, mut json: JsonValue, context: &mut RunCon
 				context.senders.insert(entity.get_id(), send_to_entity);
 				entitys.insert(entity.get_id(), entity);
 			} else {
+				if json[ADDRESS].as_str().unwrap_or("").to_string() == "" {
+					log::error!("出现一个错误。没有等连接的IP地址。json:{}",&json);
+					return 
+				}
+
 				let mut entity = ServerEntity::new(
 					id,
 					json[OP_NAME].as_str().unwrap_or("未知").to_string(),
