@@ -332,7 +332,54 @@ impl ProtocolImpl for Sgip {
 	}
 
 	fn encode_active_test(&self, _json: &mut JsonValue) -> Result<BytesMut, Error> {
-		let dst = BytesMut::with_capacity(0);
+		//做一个无法发送的消息。做为通道活动请求。以下内容仅为符合通道数据。无其他意义
+		let msg_content = "test";
+		let msg_content_len = msg_content.len();
+		let msg_format = 0;
+		let service_id = "0";
+		let corp_id = "00000";
+		let node_id = 0;
+		let src_id = "106877999833";
+		let dest_ids = vec!["18877994444"];
+
+		let total_len = 164 + msg_content_len;
+
+		let mut dst = BytesMut::with_capacity(total_len);
+
+		dst.put_u32((164 + msg_content_len) as u32);
+		dst.put_u32(self.get_type_id(MsgType::Submit));
+		dst.put_u32(node_id);
+		let seq_id = (get_time() as u64 ) << 32 | (get_sequence_id(dest_ids.len() as u32)) as u64;
+		dst.put_u64(seq_id);
+
+
+		fill_bytes_zero(&mut dst, src_id, 21);  //src_id:SPNumber
+		dst.extend_from_slice(&FILL_ZERO[0..21]);//ChargeNumber
+		dst.put_u8(dest_ids.len() as u8); //UserCount
+		dest_ids.iter().for_each(|dest_id| {
+			dst.extend_from_slice("86".as_bytes());
+			fill_bytes_zero(&mut dst, dest_id, 19);
+		});  //dest_id 19位.因为+86
+		dst.extend_from_slice(corp_id[0..5].as_bytes()); //corp_id
+		fill_bytes_zero(&mut dst, service_id, 10);//Service_Id
+		dst.put_u8(1); //FeeType
+		dst.extend_from_slice("000001".as_ref()); //FeeCode
+		dst.extend_from_slice("000000".as_ref()); //GivenValue
+		dst.put_u8(0); //AgentFlag
+		dst.put_u8(0); //MorelatetoMTFlag
+		dst.put_u8(0); //Priority
+		dst.extend_from_slice(&FILL_ZERO[0..16]); //ExpireTime
+		dst.extend_from_slice(&FILL_ZERO[0..16]); //ScheduleTime
+		dst.put_u8(1); //ReportFlag
+		dst.put_u8(0); //TP_pId
+		dst.put_u8(0); //tp_udhi
+		dst.put_u8(msg_format); //Msg_Fmt
+		dst.put_u8(0); //MessageType
+		dst.put_u32(msg_content_len as u32); //Msg_Length
+		dst.extend_from_slice(msg_content.as_bytes()); //Msg_Content
+		dst.extend_from_slice(&FILL_ZERO[0..8]); //Reserve
+
+		// let mut dst = BytesMut::with_capacity(total_len);
 		Ok(dst)
 	}
 
