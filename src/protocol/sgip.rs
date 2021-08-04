@@ -621,16 +621,16 @@ impl ProtocolImpl for Sgip {
 
 		json[MSG_TYPE_U32] = tp.into();
 		json[SP_ID] = node_id.into();
-		let seq_id = buf.get_u64();
-		json[SEQ_ID] = seq_id.into();
+		json[SEQ_ID] = buf.get_u64().into();
+		
+		let node_id =  buf.get_u32().into();
+		let seq_id =  buf.get_u64().into();
 		json[MSG_ID] = sgip_msg_id_u64_to_str(node_id, seq_id).into();
 
-		json[RESP_NODE_ID] = buf.get_u32().into();
-		json[RESP_SEQ_ID] = buf.get_u64().into();
 		buf.advance(1); //ReportType
 		json[SRC_ID] = load_utf8_string(buf, 21).into(); //src_id 21
 		json[STATE] = buf.get_u8().into(); //State
-		json[STATE] = buf.get_u8().into(); //ErrorCode
+		json[ERROR_CODE] = buf.get_u8().into(); //ErrorCode
 
 		Ok(json)
 	}
