@@ -3,7 +3,7 @@ use json::JsonValue;
 use std::sync::Arc;
 use crate::entity::{ChannelStates, EntityType};
 use std::collections::HashMap;
-use crate::protocol::names::{ACCOUNT_MSG_ID, CAN_WRITE, DEST_ID, DEST_IDS, DURATION, ENTITY_ID, ID, IS_PRIORITY, LONG_SMS_NOW_NUMBER, LONG_SMS_TOTAL, MANAGER_TYPE, MSG_CONTENT, MSG_ID, MSG_IDS, MSG_TYPE_STR, NEED_RE_SEND, PASSAGE_MSG_ID, RECEIVE_TIME, SEQ_ID, SEQ_IDS, SERVICE_ID, SP_ID, SRC_ID, STATE, WAIT_RECEIPT};
+use crate::protocol::names::{ACCOUNT_MSG_ID, CAN_WRITE, DEST_ID, DEST_IDS, DURATION, ENTITY_ID, ID, IS_PRIORITY, LONG_SMS_NOW_NUMBER, LONG_SMS_TOTAL, MANAGER_TYPE, MSG_CONTENT, MSG_ID, MSG_IDS, MSG_TYPE_STR, NEED_RE_SEND, NODE_ID, PASSAGE_MSG_ID, RECEIVE_TIME, SEQ_ID, SEQ_IDS, SERVICE_ID, SP_ID, SRC_ID, STATE, WAIT_RECEIPT};
 use crate::protocol::MsgType;
 use crate::global::{TEMP_SAVE, message_sender, TOPIC_TO_B_SUBMIT, TOPIC_TO_B_DELIVER, TOPIC_TO_B_DELIVER_RESP, TOPIC_TO_B_SUBMIT_RESP, TOPIC_TO_B_REPORT_RESP, TOPIC_TO_B_REPORT, TOPIC_TO_B_FAILURE, TOPIC_TO_B_PASSAGE_STATE_CHANGE, TOPIC_TO_B_ACCOUNT_STATE_CHANGE};
 use crate::message_queue::KafkaMessageProducer;
@@ -56,6 +56,7 @@ struct EntityRunContext {
 	entity_type: EntityType,
 	service_id: String,
 	sp_id: String,
+	node_id:u32,
 	index: usize,
 	send_channels: Vec<ChannelStates>,
 	wait_receipt_map: HashMap<u64, JsonValue>,
@@ -72,12 +73,13 @@ impl Display for EntityRunContext {
 }
 
 pub async fn start_entity(mut manager_to_entity_rx: mpsc::
-Receiver<JsonValue>, mut from_channel: mpsc::Receiver<JsonValue>, entity_id: u32, service_id: String, sp_id: String, now_conn_num: Arc<AtomicU8>, entity_type: EntityType) {
+Receiver<JsonValue>, mut from_channel: mpsc::Receiver<JsonValue>, entity_id: u32, service_id: String, sp_id: String, node_id: u32, now_conn_num: Arc<AtomicU8>, entity_type: EntityType) {
 	let mut context = EntityRunContext {
 		entity_id,
 		entity_type,
 		service_id,
 		sp_id,
+		node_id,
 		index: 0,
 		send_channels: Vec::new(),
 		wait_receipt_map: HashMap::new(),
@@ -483,6 +485,8 @@ async fn send_to_channels(msg: JsonValue, context: &mut EntityRunContext) {
 
 	send_msg[ENTITY_ID] = context.entity_id.into();
 	send_msg[SP_ID] = context.sp_id.as_str().into();
+	send_msg[NODE_ID] = context.node_id.into();
+	
 	if !context.service_id.is_empty() {
 		send_msg[SERVICE_ID] = context.service_id.as_str().into();
 	}

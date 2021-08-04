@@ -26,6 +26,7 @@ pub static TEXT: &'static str = "text";
 pub static RESP_SEQ_ID: &'static str = "resp_seq_id";
 pub static PASSWORD: &'static str = "password";
 pub static ADDRESS: &'static str = "gatewayIp";
+pub static NODE_ID: &'static str = "nodeId";
 pub static LOGIN_NAME: &'static str = "loginName";
 pub static STATE: &'static str = "state";
 pub static CAN_WRITE: &'static str = "can_write";

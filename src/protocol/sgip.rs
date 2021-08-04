@@ -9,13 +9,13 @@ use tokio_util::codec::{Decoder, LengthDelimitedCodec};
 use crate::protocol::{SmsStatus};
 use crate::protocol::msg_type::MsgType;
 use crate::protocol::implements::{ProtocolImpl, fill_bytes_zero, get_time, load_utf8_string, decode_msg_content};
-use crate::protocol::names::{LOGIN_NAME, PASSWORD, MSG_TYPE_U32, SEQ_ID, STATUS, MSG_CONTENT, SERVICE_ID, SP_ID, SRC_ID, DEST_IDS, SEQ_IDS, MSG_FMT, DEST_ID, STATE, RESP_NODE_ID, ERROR_CODE, RESP_SEQ_ID};
+use crate::protocol::names::{LOGIN_NAME, PASSWORD, MSG_TYPE_U32, SEQ_ID, RESULT, MSG_CONTENT, SERVICE_ID, SP_ID, SRC_ID, DEST_IDS, SEQ_IDS, MSG_FMT, DEST_ID, STATE, RESP_NODE_ID, ERROR_CODE, RESP_SEQ_ID};
 use crate::global::get_sequence_id;
 use crate::protocol::msg_type::MsgType::{Connect, SubmitResp};
 use crate::global::FILL_ZERO;
 
 use super::implements::{encode_msg_content, sgip_msg_id_str_to_u64, sgip_msg_id_u64_to_str};
-use super::names::{CAN_WRITE, MSG_ID, PASSAGE_MSG_ID, VERSION};
+use super::names::{CAN_WRITE, MSG_ID, NODE_ID, PASSAGE_MSG_ID, VERSION};
 
 ///Sgip协议的处理
 #[derive(Debug)]
@@ -337,7 +337,7 @@ impl ProtocolImpl for Sgip {
 	}
 
 	fn encode_deliver(&self, json: &mut JsonValue) -> Result<BytesMut, Error> {
-		let node_id = match json[SP_ID].as_u32() {
+		let node_id = match json[NODE_ID].as_u32() {
 			Some(v) => v,
 			None => {
 				log::error!("没有node_id.退出..json:{}", json);
@@ -472,8 +472,8 @@ impl ProtocolImpl for Sgip {
 			}
 		};
 
-		let node_id = match json[SP_ID].as_str() {
-			Some(v) => v.parse().unwrap_or(0),
+		let node_id = match json[NODE_ID].as_u32() {
+			Some(v) => v,
 			None => {
 				log::error!("没有node_id.退出..json:{}", json);
 				return Err(io::Error::new(io::ErrorKind::NotFound, "没有node_id"));
@@ -532,7 +532,7 @@ impl ProtocolImpl for Sgip {
 			dst.put_u32((143 + dest_ids.len() * 21 + msg_content_head_len + this_msg_content.len()) as u32);
 			dst.put_u32(self.get_type_id(MsgType::Submit));
 			dst.put_u32(node_id);
-			let seq_id = (get_time() as u64 )<< 32 | (get_sequence_id(dest_ids.len() as u32)) as u64;
+			let seq_id = (get_time() as u64 ) << 32 | (get_sequence_id(dest_ids.len() as u32)) as u64;
 			dst.put_u64(seq_id);
 
 			seq_ids.push(seq_id);
@@ -586,7 +586,7 @@ impl ProtocolImpl for Sgip {
 		json[SEQ_ID] = seq_id.into();
 		json[MSG_ID] = sgip_msg_id_u64_to_str(node_id, seq_id).into(); 
 
-		json[STATUS] = buf.get_u8().into();
+		json[RESULT] = buf.get_u8().into();
 
 		Ok(json)
 	}
@@ -599,7 +599,7 @@ impl ProtocolImpl for Sgip {
 		let seq_id = buf.get_u64();
 		json[SEQ_ID] = seq_id.into();
 		json[MSG_ID] = sgip_msg_id_u64_to_str(node_id, seq_id).into();
-		json[STATUS] = buf.get_u8().into();
+		json[RESULT] = buf.get_u8().into();
 
 		Ok(json)
 	}
@@ -665,7 +665,7 @@ impl ProtocolImpl for Sgip {
 		json[SEQ_ID] = seq_id.into();
 		json[MSG_ID] = sgip_msg_id_u64_to_str(node_id, seq_id).into(); 
 
-		json[STATUS] = buf.get_u8().into();
+		json[RESULT] = buf.get_u8().into();
 
 		Ok(json)
 	}

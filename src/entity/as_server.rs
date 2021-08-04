@@ -37,6 +37,7 @@ pub struct ServerEntity {
 	gateway_password: String,
 	//服务器可以连接过来的数量
 	server_connect_number: usize,
+	node_id:u32,
 }
 
 impl ServerEntity {
@@ -54,6 +55,7 @@ impl ServerEntity {
 	           max_channel_number: usize,
 						 gateway_login_name: String,
 						 gateway_password: String,
+						 node_id:u32,
 	           config: JsonValue,
 	           send_to_manager_tx: mpsc::Sender<JsonValue>,
 	) -> Self {
@@ -84,6 +86,7 @@ impl ServerEntity {
 			gateway_login_name,
 			gateway_password,
 			server_connect_number,
+			node_id,
 		}
 	}
 	///开启一个entity的启动。连接对端,准备接收数据等
