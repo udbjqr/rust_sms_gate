@@ -19,6 +19,7 @@ pub static NEED_RE_SEND: &'static str = "need_re_send";
 pub static MSG_IDS: &'static str = "msg_ids";
 pub static IS_REPORT: &'static str = "is_report";
 pub static RESULT: &'static str = "result";
+pub static SPEED_LIMIT: &'static str = "speed_limit";
 pub static MSG_CONTENT: &'static str = "msg_content";
 pub static SERVICE_ID: &'static str = "serviceId";
 pub static RESP_NODE_ID: &'static str = "resp_node_id";

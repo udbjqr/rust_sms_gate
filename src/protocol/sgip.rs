@@ -15,7 +15,7 @@ use crate::protocol::msg_type::MsgType::{Connect, SubmitResp};
 use crate::global::FILL_ZERO;
 
 use super::implements::{encode_msg_content, sgip_msg_id_str_to_u64, sgip_msg_id_u64_to_str};
-use super::names::{CAN_WRITE, MSG_ID, NODE_ID, PASSAGE_MSG_ID, STATUS, VERSION};
+use super::names::{CAN_WRITE, MSG_ID, NODE_ID, PASSAGE_MSG_ID, SPEED_LIMIT, STATUS, VERSION};
 
 ///Sgip协议的处理
 #[derive(Debug)]
@@ -28,6 +28,10 @@ pub struct Sgip {
 impl ProtocolImpl for Sgip {
 	fn get_framed(&mut self, buf: &mut BytesMut) -> io::Result<Option<BytesMut>> {
 		self.length_codec.decode(buf)
+	}
+	
+	fn is_speed_limit(&self, code: u32) -> bool{
+		return code == 88
 	}
 
 	fn get_type_id(&self, t: MsgType) -> u32 {
@@ -646,8 +650,12 @@ impl ProtocolImpl for Sgip {
 		let seq_id = buf.get_u64();
 		json[SEQ_ID] = seq_id.into();
 		json[MSG_ID] = sgip_msg_id_u64_to_str(node_id, seq_id).into();
-		json[RESULT] = buf.get_u8().into();
-
+		let result = buf.get_u8();//result 4
+		json[RESULT] = result.into();
+		
+		if self.is_speed_limit(result as u32) {
+			json[SPEED_LIMIT] = true.into();
+		};
 		Ok(json)
 	}
 

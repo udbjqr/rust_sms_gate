@@ -787,9 +787,18 @@ pub trait ProtocolImpl: Send + Sync {
 		json[MSG_TYPE_U32] = tp.into();
 		json[SEQ_ID] = seq.into();
 		json[MSG_ID] = cmpp_msg_id_u64_to_str(buf.get_u64()).into();//msg_id 8
-		json[RESULT] = buf.get_u32().into();//result 4
+		let result = buf.get_u32();//result 4
+		json[RESULT] = result.into();
+		
+		if self.is_speed_limit(result) {
+			json[SPEED_LIMIT] = true.into();
+		};
 
 		Ok(json)
+	}
+
+	fn is_speed_limit(&self, code: u32) -> bool{
+		return code == 8
 	}
 
 	fn decode_nobody(&self, _buf: &mut BytesMut, seq: u32, tp: u32) -> Result<JsonValue, io::Error> {

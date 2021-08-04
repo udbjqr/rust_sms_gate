@@ -11,6 +11,7 @@ use crate::global::{get_sequence_id, FILL_ZERO};
 use crate::global::ISMG_ID;
 
 use super::implements::encode_msg_content;
+use super::names::SPEED_LIMIT;
 
 ///Sgip协议的处理
 #[derive(Debug, Default)]
@@ -550,9 +551,19 @@ impl ProtocolImpl for Smgp30 {
 
 		let msg_id = smgp_msg_id_buf_to_str(&buf.split_to(10));
 		json[MSG_ID] = msg_id.into();
-		json[RESULT] = buf.get_u32().into();//result 4
+
+		let result = buf.get_u32();//result 4
+		json[RESULT] = result.into();
+		
+		if self.is_speed_limit(result) {
+			json[SPEED_LIMIT] = true.into();
+		};
 
 		Ok(json)
+	}
+
+	fn is_speed_limit(&self, code: u32) -> bool{
+		return code == 75
 	}
 
 	fn decode_deliver(&self, buf: &mut BytesMut, seq: u32, tp: u32) -> Result<JsonValue, io::Error> {
