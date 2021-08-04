@@ -14,6 +14,8 @@ use crate::protocol::msg_type::SmsStatus;
 use crate::protocol::names::{SEQ_ID, PASSAGE_MSG_ID, AUTHENTICATOR, VERSION, STATUS, MSG_TYPE_U32, MSG_CONTENT, MSG_ID, SERVICE_ID, TP_UDHI, SP_ID, VALID_TIME, AT_TIME, SRC_ID, MSG_FMT, DEST_IDS, RESULT, DEST_ID, STATE, SUBMIT_TIME, DONE_TIME, SMSC_SEQUENCE, IS_REPORT, MSG_TYPE_STR, LONG_SMS_TOTAL, LONG_SMS_NOW_NUMBER, SEQ_IDS, LOGIN_NAME, PASSWORD, TIMESTAMP, MSG_IDS};
 use crate::protocol::MsgType;
 
+use super::names::SPEED_LIMIT;
+
 pub trait ProtocolImpl: Send + Sync {
 	fn get_framed(&mut self, buf: &mut BytesMut) -> io::Result<Option<BytesMut>>;
 
