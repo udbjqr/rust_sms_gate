@@ -15,7 +15,7 @@ use crate::protocol::msg_type::MsgType::{Connect, SubmitResp};
 use crate::global::FILL_ZERO;
 
 use super::implements::{encode_msg_content, sgip_msg_id_str_to_u64, sgip_msg_id_u64_to_str};
-use super::names::{CAN_WRITE, MSG_ID, NODE_ID, PASSAGE_MSG_ID, VERSION};
+use super::names::{CAN_WRITE, MSG_ID, NODE_ID, PASSAGE_MSG_ID, STATUS, VERSION};
 
 ///Sgip协议的处理
 #[derive(Debug)]
@@ -586,7 +586,7 @@ impl ProtocolImpl for Sgip {
 		json[SEQ_ID] = seq_id.into();
 		json[MSG_ID] = sgip_msg_id_u64_to_str(node_id, seq_id).into(); 
 
-		json[RESULT] = buf.get_u8().into();
+		json[STATUS] = buf.get_u8().into();
 
 		Ok(json)
 	}
