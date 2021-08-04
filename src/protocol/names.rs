@@ -35,6 +35,7 @@ pub static SMSC_SEQUENCE: &'static str = "smsc_sequence";
 pub static DONE_TIME: &'static str = "done_time";
 pub static TP_UDHI: &'static str = "tp_udhi";
 pub static SP_ID: &'static str = "spId";
+pub static CROP_ID: &'static str = "corpId";
 pub static VALID_TIME: &'static str = "valid_time";
 pub static AT_TIME: &'static str = "at_time";
 pub static ERROR_CODE: &'static str = "error_code";

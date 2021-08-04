@@ -13,7 +13,7 @@ use crate::entity::{CustomEntity, Entity};
 use crate::entity::as_server::ServerEntity;
 use crate::get_runtime;
 use crate::global::{load_config_file, TOPIC_FROM_B_SUBMIT, TOPIC_FROM_B_DELIVER, TOPIC_FROM_B_REPORT, TOPIC_PASSAGE_REQUEST_STATE};
-use crate::protocol::names::{ADDRESS, ALLOW_ADDRS, GATEWAY_LOGIN_NAME, GATEWAY_PASSWORD, LOGIN_NAME, MANAGER_TYPE, MAX_CHANNEL_NUMBER, NAME, NODE_ID, OP_NAME, PASSWORD, PROTOCOL, READ_LIMIT, SERVICE_ID, SP_ID, VERSION, WRITE_LIMIT};
+use crate::protocol::names::{ADDRESS, ALLOW_ADDRS, CROP_ID, GATEWAY_LOGIN_NAME, GATEWAY_PASSWORD, LOGIN_NAME, MANAGER_TYPE, MAX_CHANNEL_NUMBER, NAME, NODE_ID, OP_NAME, PASSWORD, PROTOCOL, READ_LIMIT, SERVICE_ID, SP_ID, VERSION, WRITE_LIMIT};
 
 ///实体的管理对象。
 /// 负责处理消息队列送过来的实体的开启、关闭等操作
@@ -264,16 +264,25 @@ async fn handle_queue_msg(topic: &str, mut json: JsonValue, context: &mut RunCon
 					return 
 				}
 
+				let protocol_name = json[PROTOCOL].as_str().unwrap_or("").to_string();
+				let sp_id = if protocol_name == "SGIP" {
+					log::trace!("SGIP协议，使用sp_id字段存放crop_id");
+
+					json[CROP_ID].as_str().unwrap_or("").to_string()
+				} else {
+					json[SP_ID].as_str().unwrap_or("").to_string()
+				};
+
 				let mut entity = ServerEntity::new(
 					id,
 					json[OP_NAME].as_str().unwrap_or("未知").to_string(),
 					json[SERVICE_ID].as_str().unwrap_or("未知").to_string(),
-					json[SP_ID].as_str().unwrap_or("").to_string(),
+					sp_id,
 					json[LOGIN_NAME].as_str().unwrap_or("").to_string(),
 					json[PASSWORD].as_str().unwrap_or("").to_string(),
 					json[ADDRESS].as_str().unwrap_or("").to_string(),
 					json[VERSION].as_str().unwrap_or("0").parse().unwrap_or(0),
-					json[PROTOCOL].as_str().unwrap_or("").to_string(),
+					protocol_name,
 					json[READ_LIMIT].as_u32().unwrap_or(200),
 					json[WRITE_LIMIT].as_u32().unwrap_or(200),
 					json[MAX_CHANNEL_NUMBER].as_usize().unwrap_or(0x1),
