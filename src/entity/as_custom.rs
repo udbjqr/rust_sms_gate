@@ -75,7 +75,7 @@ impl CustomEntity {
 
 		log::info!("通道{},,开始启动处理消息.", self.name);
 		//这里开始自己的消息处理
-		get_runtime().spawn(start_entity(manage_to_entity_rx, channel_to_entity_rx, self.id, self.service_id.clone(), self.sp_id.clone(), self.now_channel_number.clone(), EntityType::Custom));
+		get_runtime().spawn(start_entity(manage_to_entity_rx, channel_to_entity_rx, self.id, self.service_id.clone(), self.sp_id.clone(),0, self.now_channel_number.clone(), EntityType::Custom));
 
 		self.channel_to_entity_tx = Some(channel_to_entity_tx);
 

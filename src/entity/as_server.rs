@@ -97,7 +97,7 @@ impl ServerEntity {
 		let (channel_to_entity_tx, channel_to_entity_rx) = mpsc::channel(self.read_limit as usize);
 
 		//这里开始自己的消息处理
-		get_runtime().spawn(start_entity(manage_to_entity_rx, channel_to_entity_rx, self.id, self.service_id.clone(), self.sp_id.clone(), self.now_channel_number.clone(), EntityType::Server));
+		get_runtime().spawn(start_entity(manage_to_entity_rx, channel_to_entity_rx, self.id, self.service_id.clone(), self.sp_id.clone(),self.node_id, self.now_channel_number.clone(), EntityType::Server));
 
 		self.channel_to_entity_tx = Some(channel_to_entity_tx);
 
