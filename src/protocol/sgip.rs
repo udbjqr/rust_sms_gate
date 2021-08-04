@@ -9,7 +9,7 @@ use tokio_util::codec::{Decoder, LengthDelimitedCodec};
 use crate::protocol::{SmsStatus};
 use crate::protocol::msg_type::MsgType;
 use crate::protocol::implements::{ProtocolImpl, fill_bytes_zero, get_time, load_utf8_string, decode_msg_content};
-use crate::protocol::names::{LOGIN_NAME, PASSWORD, MSG_TYPE_U32, SEQ_ID, RESULT, MSG_CONTENT, SERVICE_ID, SP_ID, SRC_ID, DEST_IDS, SEQ_IDS, MSG_FMT, DEST_ID, STATE, RESP_NODE_ID, ERROR_CODE, RESP_SEQ_ID};
+use crate::protocol::names::{LOGIN_NAME, PASSWORD, MSG_TYPE_U32, SEQ_ID, RESULT, MSG_CONTENT, SERVICE_ID, SP_ID, SRC_ID, DEST_IDS, SEQ_IDS, MSG_FMT, DEST_ID, STATE, ERROR_CODE};
 use crate::global::get_sequence_id;
 use crate::protocol::msg_type::MsgType::{Connect, SubmitResp};
 use crate::global::FILL_ZERO;
@@ -629,7 +629,14 @@ impl ProtocolImpl for Sgip {
 
 		buf.advance(1); //ReportType
 		json[SRC_ID] = load_utf8_string(buf, 21).into(); //src_id 21
-		json[STATE] = buf.get_u8().into(); //State
+		json[STATE]  = "DELIVRD".into();
+		//State
+		json[STATE] = match buf.get_u8(){
+			0 => "DELIVRD".into(),
+			1 => "ACCEPTD".into(),
+			_ => "SGIPERR".into()
+		};
+
 		json[ERROR_CODE] = buf.get_u8().into(); //ErrorCode
 
 		Ok(json)
