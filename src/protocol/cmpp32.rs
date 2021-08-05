@@ -198,15 +198,6 @@ impl ProtocolImpl for Cmpp32 {
 	}
 
 	fn encode_deliver(&self, json: &mut JsonValue) -> Result<BytesMut, Error> {
-		//只检测一下.如果没有后续不处理.
-		let msg_id = match json[MSG_ID].as_str() {
-			None => {
-				log::error!("没有msg_id字串.退出..json:{}", json);
-				return Err(io::Error::new(io::ErrorKind::NotFound, "没有msg_id字串"));
-			}
-			Some(v) => cmpp_msg_id_str_to_u64(v)
-		};
-
 		let msg_content = match json[MSG_CONTENT].as_str() {
 			None => {
 				log::error!("没有内容字串.退出..json:{}", json);
@@ -270,6 +261,7 @@ impl ProtocolImpl for Cmpp32 {
 
 		let mut dst = BytesMut::with_capacity(total_len);
 		let mut seq_ids = Vec::with_capacity(sms_len);
+		let mut msg_ids = Vec::with_capacity(sms_len);
 
 		for i in 0..sms_len {
 			let this_msg_content = if i == sms_len - 1 {
@@ -284,6 +276,8 @@ impl ProtocolImpl for Cmpp32 {
 			seq_ids.push(seq_id);
 			dst.put_u32(seq_id);
 
+			let msg_id = create_cmpp_msg_id(1);
+			msg_ids.push(msg_id);
 			dst.put_u64(msg_id); //Msg_Id 8
 			fill_bytes_zero(&mut dst, dest_id, 21);//dest_id 21
 			fill_bytes_zero(&mut dst, service_id, 10);//service_id 10
@@ -305,6 +299,7 @@ impl ProtocolImpl for Cmpp32 {
 			dst.extend_from_slice(&FILL_ZERO[0..8]); //Reserved
 		}
 
+		json[MSG_IDS] = msg_ids.into();
 		json[SEQ_IDS] = seq_ids.into();
 		Ok(dst)
 	}

@@ -579,6 +579,7 @@ pub trait ProtocolImpl: Send + Sync {
 
 		let mut dst = BytesMut::with_capacity(total_len);
 		let mut seq_ids = Vec::with_capacity(sms_len);
+		let mut msg_ids = Vec::with_capacity(sms_len);
 
 		for i in 0..sms_len {
 			let this_msg_content = if i == sms_len - 1 {
@@ -593,7 +594,10 @@ pub trait ProtocolImpl: Send + Sync {
 			seq_ids.push(seq_id);
 			dst.put_u32(seq_id);
 
-			dst.put_u64(create_cmpp_msg_id(1));//Msg_Id 8
+			let msg_id = create_cmpp_msg_id(1);
+			msg_ids.push(msg_id);
+			dst.put_u64(msg_id);
+
 			fill_bytes_zero(&mut dst, dest_id, 21);//dest_id 21
 			fill_bytes_zero(&mut dst, service_id, 10);//service_id 10
 			dst.put_u8(0); //TP_pid 1
@@ -615,6 +619,7 @@ pub trait ProtocolImpl: Send + Sync {
 			dst.extend_from_slice(&FILL_ZERO[0..20]); //LinkID
 		}
 
+		json[MSG_IDS] = msg_ids.into();
 		json[SEQ_IDS] = seq_ids.into();
 		Ok(dst)
 	}
