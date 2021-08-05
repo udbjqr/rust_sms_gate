@@ -61,7 +61,7 @@ impl ServerEntity {
 	) -> Self {
 		let protocol = Protocol::get_protocol(protocol.as_str(), version);
 		let server_connect_number = match protocol {
-			Protocol::SGIP(_) => 1,
+			Protocol::SGIP(_) => 10,
 			_ => 0,
 		};
 

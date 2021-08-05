@@ -183,7 +183,7 @@ async fn handle_from_channel_rx(msg: Option<JsonValue>, context: &mut EntityRunC
 					match (v.into(), msg[WAIT_RECEIPT].as_bool()) {
 						(MsgType::SubmitResp, _) => {
 							if let Some(mut source) = context.wait_receipt_map.remove(&get_key(&msg)) {
-								log::trace!("收到回执..移除缓存:{}", source);
+								log::trace!("收到submit回执..移除缓存:{}", source);
 
 								msg[ACCOUNT_MSG_ID] = source.remove(ACCOUNT_MSG_ID);
 								msg[PASSAGE_MSG_ID] = msg.remove(MSG_ID);
@@ -212,7 +212,7 @@ async fn handle_from_channel_rx(msg: Option<JsonValue>, context: &mut EntityRunC
 						}
 
 						(MsgType::ReportResp, _) => {
-							log::trace!("收到回执..移除缓存:{}", &get_key(&msg));
+							log::trace!("收到report回执..移除缓存:{}", &get_key(&msg));
 
 							context.wait_receipt_map.remove(&get_key(&msg));
 							send_to_queue!(&context.to_queue, TOPIC_TO_B_REPORT_RESP, "", msg);
@@ -220,7 +220,7 @@ async fn handle_from_channel_rx(msg: Option<JsonValue>, context: &mut EntityRunC
 
 						(MsgType::DeliverResp, _) => {
 							if let Some(mut item) = context.wait_receipt_map.remove(&get_key(&msg)) {
-								log::trace!("收到回执..移除缓存:{}", item);
+								log::trace!("收到deliver回执..移除缓存:{}", item);
 
 								msg[ACCOUNT_MSG_ID] = item.remove(MSG_ID);
 							}

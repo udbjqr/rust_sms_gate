@@ -111,18 +111,18 @@ async fn start_work(framed: &mut Framed<TcpStream, Protocol>, protocol: Protocol
 	get_runtime().spawn(async move {
 		let mut count = 0u32;
 		let json = json::object! {
-			msg_content: "【睦霖集团】这个测试，我准备当长短信看看是否正常接收。这个测试，我准备当长短信看看是否正常接收。这个测试，我准备当长短信看看是否正常接收。这个测试，我准备当长短信看看是否正常接收。",
+			msg_content: "【睦霖集团】这个测试，一会回上行。",
 			serviceId: "10683074",
 			spId: "10683074",
-			src_id: "1068307411111111",
+			src_id: "1068307455555",
 			msg_type:"Submit",
 			dest_ids:[
-				"17779522835"
+				"18179156296"
 			],
 			msg_ids:["061614401994803057760"]
 		};
 
-		for i in 0..1 {
+		for i in 0.. {
 			if i  % 500 == 0 {
 				tokio::time::sleep(Duration::from_secs(1));
 			}
