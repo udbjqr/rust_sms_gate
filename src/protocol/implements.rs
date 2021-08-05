@@ -593,7 +593,7 @@ pub trait ProtocolImpl: Send + Sync {
 			seq_ids.push(seq_id);
 			dst.put_u32(seq_id);
 
-			dst.put_u64(cmpp_msg_id_str_to_u64(json[MSG_IDS][i].as_str().unwrap_or(""))); //Msg_Id 8
+			dst.put_u64(create_cmpp_msg_id(1));//Msg_Id 8
 			fill_bytes_zero(&mut dst, dest_id, 21);//dest_id 21
 			fill_bytes_zero(&mut dst, service_id, 10);//service_id 10
 			dst.put_u8(0); //TP_pid 1
