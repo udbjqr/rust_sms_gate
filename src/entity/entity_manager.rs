@@ -273,7 +273,7 @@ async fn handle_queue_msg(topic: &str, mut json: JsonValue, context: &mut RunCon
 					json[SP_ID].as_str().unwrap_or("").to_string()
 				};
 
-				let mut entity = ServerEntity::new(
+				let mut entity = Box::new(ServerEntity::new(
 					id,
 					json[OP_NAME].as_str().unwrap_or("未知").to_string(),
 					json[SERVICE_ID].as_str().unwrap_or("未知").to_string(),
@@ -291,13 +291,13 @@ async fn handle_queue_msg(topic: &str, mut json: JsonValue, context: &mut RunCon
 					json[NODE_ID].as_str().unwrap_or("0").parse().unwrap_or(0),
 					json,
 					context.entity_to_manager_tx.clone(),
-				);
+				));
 
 				let send_to_entity = entity.start().await;
 
 				//放入管理队列的数据
 				context.senders.insert(entity.get_id(), send_to_entity);
-				entitys.insert(entity.get_id(), Box::new(entity));
+				entitys.insert(entity.get_id(), entity);
 			}
 		}
 		"account.remove" | "passage.remove" => {

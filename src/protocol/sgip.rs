@@ -217,7 +217,7 @@ impl ProtocolImpl for Sgip {
 		let mut buf = BytesMut::with_capacity(29);
 
 		buf.put_u32(29);
-		buf.put_u32(self.get_type_id(SubmitResp));
+		buf.put_u32(self.get_type_id(MsgType::ReportResp));
 		buf.put_u32(msg_id.0);
 		buf.put_u64(msg_id.1);
 		buf.put_u8(status as u8);

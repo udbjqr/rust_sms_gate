@@ -22,8 +22,8 @@ fn main() {
 	// log4rs::init_file("config/log.yaml", Default::default()).unwrap();
 
 	get_runtime().spawn(async move {
-		// let addr = "221.228.32.44:9002".parse().unwrap();
-		let addr = "47.114.180.42:7890".parse().unwrap();
+		// let addr = "47.114.180.42:7890".parse().unwrap();
+		let addr = "127.0.0.1:7890".parse().unwrap();
 		let socket = TcpSocket::new_v4().unwrap();
 		println!("连接服务器：{:?}",socket);
 		let stream = socket.connect(addr).await.unwrap();

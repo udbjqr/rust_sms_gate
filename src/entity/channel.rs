@@ -10,7 +10,7 @@ use tokio_util::codec::Framed;
 use crate::entity::EntityManager;
 use crate::get_runtime;
 use crate::protocol::{MsgType, SmsStatus::{self, MessageError, Success}, Protocol};
-use crate::protocol::names::{ADDRESS, ENTITY_ID, ID, LOGIN_NAME, MSG_TYPE_STR, STATUS, VERSION, WAIT_RECEIPT};
+use crate::protocol::names::{ADDRESS, CAN_WRITE, ENTITY_ID, ID, LOGIN_NAME, MSG_TYPE_STR, STATUS, VERSION, WAIT_RECEIPT};
 use std::time::{Instant};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use crate::global::{message_sender, TOPIC_TO_B_FAILURE};
@@ -438,7 +438,8 @@ impl Channel {
 			}
 		}
 
-		let (id, status, rx_limit, tx_limit, entity_to_channel_priority_rx, entity_to_channel_common_rx, channel_to_entity_tx) = entity.login_attach().await;
+		let (id, status, rx_limit, tx_limit, entity_to_channel_priority_rx, entity_to_channel_common_rx, channel_to_entity_tx) 
+			= entity.login_attach(login_info[CAN_WRITE].as_bool().unwrap_or(true)).await;
 
 		if let Success = status {
 			// 设置相关的参数

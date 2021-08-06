@@ -164,7 +164,7 @@ impl ServerEntity {
 
 #[async_trait]
 impl Entity for ServerEntity {
-	async fn login_attach(&self) -> (usize, SmsStatus, u32, u32, Option<mpsc::Receiver<JsonValue>>, Option<mpsc::Receiver<JsonValue>>, Option<mpsc::Sender<JsonValue>>) {
+	async fn login_attach(&self, can_write: bool) -> (usize, SmsStatus, u32, u32, Option<mpsc::Receiver<JsonValue>>, Option<mpsc::Receiver<JsonValue>>, Option<mpsc::Sender<JsonValue>>) {
 		if (self.max_channel_number + self.server_connect_number) <= self.now_channel_number.load(Ordering::Relaxed) as usize {
 			log::warn!("当前已经满。不再继续增加。entity_id:{},最大可用:{},实际已经:{}", self.id, self.max_channel_number, self.now_channel_number.load(Ordering::Relaxed));
 			return (0, SmsStatus::OtherError, 0, 0, None, None, None);
@@ -184,6 +184,7 @@ impl Entity for ServerEntity {
 			msg_type:"Connect",
 			entity_id : self.id,
 			channel_id : index,
+			can_write: can_write,
 		};
 
 		if let Err(e) = channel_to_entity_tx.send(msg).await {

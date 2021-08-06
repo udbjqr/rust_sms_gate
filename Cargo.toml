@@ -1,6 +1,6 @@
 [package]
 name = "sms_gate"
-version = "0.3.1"
+version = "0.3.3"
 authors = ["udbjqr <udbjqr@sohu.com>"]
 edition = "2018"
 
@@ -27,11 +27,10 @@ log4rs =  { version = "1.0.0", features = ["background_rotation","gzip"] }
 name="sms_gate"
 path= "src/main.rs"
 
+[[bin]]
+name="sms_gate_server"
+path= "src/main_server.rs"
 
 [[bin]]
 name="sms_gate_test"
-path= "src/main_test.rs"
-
-[[bin]]
-name="test_"
 path= "src/main_test.rs"

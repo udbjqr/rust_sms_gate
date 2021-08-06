@@ -17,7 +17,7 @@ pub use self::entity_running::start_entity;
 #[macro_use]
 pub mod channel;
 mod as_custom;
-mod as_server;
+pub mod as_server;
 mod services;
 mod entity_manager;
 mod entity_running;
@@ -26,7 +26,7 @@ mod entity_running;
 pub trait Entity: Send + Sync + Debug {
 	/// 返回值依次为:
 	/// id,登录状态,rx_limit,tx_limit,entity_to_channel_priority_rx,entity_to_channel_common_rx,channel_to_entity_tx
-	async fn login_attach(&self) -> (usize, SmsStatus, u32, u32, Option<mpsc::Receiver<JsonValue>>, Option<mpsc::Receiver<JsonValue>>, Option<mpsc::Sender<JsonValue>>);
+	async fn login_attach(&self,can_write: bool) -> (usize, SmsStatus, u32, u32, Option<mpsc::Receiver<JsonValue>>, Option<mpsc::Receiver<JsonValue>>, Option<mpsc::Sender<JsonValue>>);
 	fn get_id(&self) -> u32;
 	fn get_login_name(&self) -> &str;
 	fn get_password(&self) -> &str;
