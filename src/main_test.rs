@@ -18,8 +18,8 @@ use sms_gate::protocol::smgp::Smgp30;
 use futures::task::SpawnExt;
 
 fn main() {
-	simple_logger::SimpleLogger::init(Default::default());
-	// log4rs::init_file("config/log.yaml", Default::default()).unwrap();
+	// simple_logger::SimpleLogger::init(Default::default());
+	log4rs::init_file("config/log_client.yaml", Default::default()).unwrap();
 
 	get_runtime().spawn(async move {
 		// let addr = "47.114.180.42:7890".parse().unwrap();
@@ -29,7 +29,7 @@ fn main() {
 		let stream = socket.connect(addr).await.unwrap();
 
 		println!("连接服务器：{:?}",stream);
-		let mut protocol = Protocol::CMPP32(Cmpp32::new());
+		let mut protocol = Protocol::CMPP48(Cmpp48::new());
 		let mut framed = Framed::new(stream, protocol.clone());
 
 		let mut login_msg = json::object! {
@@ -117,19 +117,42 @@ async fn start_work(framed: &mut Framed<TcpStream, Protocol>, protocol: Protocol
 			src_id: "1068307455555",
 			msg_type:"Submit",
 			dest_ids:[
-				"18179156296"
+				"13121958888"
 			],
 			msg_ids:["061614401994803057760"]
 		};
 
-		for i in 0.. {
-			if i  % 500 == 0 {
-				tokio::time::sleep(Duration::from_secs(1));
-			}
+		let json2 = json::object! {
+			msg_content: "【睦霖集团】这个测试，一会回上行。",
+			serviceId: "10683074",
+			spId: "10683074",
+			src_id: "1068307455555",
+			msg_type:"Submit",
+			dest_ids:[
+				"18179156296"
+			],
+			msg_ids:["061614401994803057760"]
+		};
+		for d in 0..5 {
+			
+			tokio::time::sleep(Duration::from_millis(1000)).await;
 
-			if let Err(e) = tx.send(json.clone()) {
-				println!("发送消息错误:{}", e);
-			}
+			for i in 0..50 {
+				//修改内容		
+				let mut js = json.clone();
+				let mut js2 = json2.clone();
+				js["msg_content"] = i.to_string().into();
+				js2["msg_content"] = i.to_string().into();
+				
+				if let Err(e) = tx.send(js) {
+					println!("发送消息错误:{}", e);
+				}
+
+				if let Err(e) = tx.send(js2) {
+					println!("发送消息错误:{}", e);
+				}
+
+			};
 		};
 	});
 

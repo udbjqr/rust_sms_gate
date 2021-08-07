@@ -4,14 +4,14 @@ use std::{io, net::{IpAddr, Ipv4Addr}};
 
 use futures::{SinkExt, StreamExt};
 use json::JsonValue;
-use sms_gate::{entity::{CustomEntity}, get_runtime, global::{get_sequence_id, load_config_file}, protocol::{ MsgType, Protocol, ProtocolImpl, SmsStatus, names::{ID, MSG_TYPE_STR, WAIT_RECEIPT}}};
+use sms_gate::{entity::{CustomEntity}, get_runtime, global::{get_sequence_id, load_config_file}, protocol::{Cmpp48, MsgType, Protocol, ProtocolImpl, SmsStatus, cmpp32::Cmpp32, names::{DEST_IDS, ID, MSG_TYPE_STR, WAIT_RECEIPT}}};
 use tokio::{net::{TcpListener, TcpStream}, sync::mpsc::{self, Sender}, time::{self, Duration, timeout}};
 use tokio_util::codec::Framed;
 use std::time::{Instant};
 
 fn main() {
-	simple_logger::SimpleLogger::init(Default::default());
-	// log4rs::init_file("config/log.yaml", Default::default()).unwrap();
+	// simple_logger::SimpleLogger::init(Default::default());
+	log4rs::init_file("config/log_server.yaml", Default::default()).unwrap();
 
 
 	//使用enter 加载运行时。必须需要let _guard 要不没有生命周期。
@@ -36,6 +36,7 @@ fn main() {
 		entity_to_manager.clone()
 	));
 
+	get_runtime().spawn(start_service("127.0.0.1:5000".to_owned(),Protocol::CMPP48(Cmpp48::new())));
 
 	std::thread::park();
 }
@@ -64,13 +65,13 @@ async fn start_server(stream: TcpStream,protocol: Protocol){
 async fn start_work(framed: &mut Framed<TcpStream, Protocol>,protocol: Protocol) {
 	let (entity_to_channel_tx, mut entity_to_channel_rx) = mpsc::channel::<JsonValue>(0xffffffff);
 
-	let tx_limit = 200;
-	let rx_limit = 200u32;
+	let tx_limit = 1000;
+	let rx_limit = 1000u32;
 	let id = get_sequence_id(1);
 	log::debug!("连接成功.channel准备处理数据.id:{}", id);
 
 	let mut active_test = json::object! {
-				msg_type : "ActiveTest"
+		msg_type : "ActiveTest"
 	};
 
 	let mut curr_tx: u32 = 0;
@@ -141,10 +142,10 @@ async fn start_work(framed: &mut Framed<TcpStream, Protocol>,protocol: Protocol)
 								}
 							}
 
-							//这里准备处理做返回
-							get_runtime().spawn(return_msg(json,protocol.clone(),entity_to_channel_tx.clone()));
-
-							return;
+							if ty == MsgType::Submit {
+								//这里准备处理做返回
+								get_runtime().spawn(return_msg(json,protocol.clone(),entity_to_channel_tx.clone()));
+							}
 						} else {
 							// 超出,返回流量超出
 							if let Some(resp) = protocol.encode_receipt(SmsStatus::TrafficRestrictions, &mut json) {
@@ -176,6 +177,8 @@ async fn start_work(framed: &mut Framed<TcpStream, Protocol>,protocol: Protocol)
 			}
 		}
 	}
+
+	log::info!("当前通道结束退出.{}",id);
 }
 
 
@@ -214,6 +217,7 @@ fn start() -> Result<(), io::Error> {
 
 ///启动一个服务等待连接
 async fn start_service(host: String, server_type: Protocol) {
+	log::info!("等待接入,host:{},type:{}", host, server_type);
 	let listener = match TcpListener::bind(host.as_str()).await {
 		Ok(l) => l,
 		Err(e) => {
@@ -245,15 +249,15 @@ async fn return_msg(json: JsonValue,protocol: Protocol,sender: Sender<JsonValue>
 	let time = rand::random::<u64>() % 2000 + 50u64;
 	let duration = Duration::from_millis(time);
 	tokio::time::sleep(duration).await;
-
-
+	let d = json[DEST_IDS][0].as_str().unwrap_or("");
 	let msg = json::object!{
 		msg_fmt: 0,
 		src_id: json["src_id"].as_str().unwrap_or(""),
 		submit_time: "2108052003",
+		serviceId: "",
 		msg_type: "Report",
 		state: "DELIVRD",
-		dest_id: json["dest_id"].as_str().unwrap_or(""),
+		dest_id: d,
 		msg_id: json["msg_id"].as_str().unwrap_or(""),
 		done_time: "2108052003"
 	};
