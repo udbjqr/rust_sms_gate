@@ -305,8 +305,9 @@ impl ProtocolImpl for Smgp30 {
 			Some(v) => v
 		};
 
+		let msg_fmt = json[MSG_FMT].as_u8().unwrap_or(15);
 		//编码以后的消息内容
-		let msg_content_code = match encode_msg_content(json[MSG_FMT].as_u8().unwrap_or(15),msg_content) {
+		let msg_content_code = match encode_msg_content(msg_fmt,msg_content) {
 			Ok(v) => v,
 			Err(e) => {
 				log::error!("字符串内容解码出现错误..json:{}.e:{}", json, e);
@@ -377,7 +378,7 @@ impl ProtocolImpl for Smgp30 {
 			dst.put(self.create_msg_id(1));
 
 			dst.put_u8(0); //IsReport
-			dst.put_u8(15); //MsgFormat
+			dst.put_u8(msg_fmt); //MsgFormat
 			fill_bytes_zero(&mut dst, receive_time, 14);//receive_time 14
 			fill_bytes_zero(&mut dst, src_id, 21);//src_id 21
 			fill_bytes_zero(&mut dst, dest_id, 21);//dest_id 21
@@ -415,10 +416,10 @@ impl ProtocolImpl for Smgp30 {
 			return Err(io::Error::new(io::ErrorKind::NotFound, "没有msg_ids"));
 		};
 
-		let msg_format = json[MSG_FMT].as_u8().unwrap_or(15);
+		let msg_fmt = json[MSG_FMT].as_u8().unwrap_or(15);
 
 		//编码以后的消息内容
-		let msg_content_code = match encode_msg_content(msg_format,msg_content) {
+		let msg_content_code = match encode_msg_content(msg_fmt,msg_content) {
 			Ok(v) => v,
 			Err(e) => {
 				log::error!("字符串内容解码出现错误..json:{}.e:{}", json, e);
@@ -517,7 +518,7 @@ impl ProtocolImpl for Smgp30 {
 			dst.extend_from_slice("00".as_bytes());//FeeType
 			dst.extend_from_slice("000000".as_bytes());//FeeCode
 			dst.extend_from_slice("000000".as_bytes());//FixedFee
-			dst.put_u8(msg_format); //MsgFormat
+			dst.put_u8(msg_fmt); //MsgFormat
 			fill_bytes_zero(&mut dst, valid_time, 17);  //valid_time
 			fill_bytes_zero(&mut dst, at_time, 17);  //at_time
 			fill_bytes_zero(&mut dst, src_id, 21);  //src_id
