@@ -133,11 +133,11 @@ async fn start_work(framed: &mut Framed<TcpStream, Protocol>, protocol: Protocol
 			],
 			msg_ids:["061614401994803057760"]
 		};
-		for d in 0..5 {
+		for d in 0..1000 {
 			
 			tokio::time::sleep(Duration::from_millis(1000)).await;
 
-			for i in 0..50 {
+			for i in 0..200 {
 				//修改内容		
 				let mut js = json.clone();
 				let mut js2 = json2.clone();

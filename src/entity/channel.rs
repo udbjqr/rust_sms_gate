@@ -223,7 +223,8 @@ impl Channel {
 							if let Ok(msg) = self.protocol.encode_message(&mut send) {
 								log::info!("{}向对端发送消息{}", self.id, &send);
 								if let Err(e) = framed.send(msg).await {
-									error!("发送回执出现错误, e:{}", e);
+									error!("发送消息出现错误, e:{}", e);
+									message_sender().send(TOPIC_TO_B_FAILURE, "3", send.to_string()).await;
 								} else {
 									// 计数加1
 									curr_tx = curr_tx + 1;
@@ -299,6 +300,7 @@ impl Channel {
 								if let Some(resp) = self.protocol.encode_receipt(SmsStatus::Success, &mut json) {
 									if let Err(e) = framed.send(resp).await {
 										error!("发送回执出现错误, e:{}", e);
+										continue;
 									}
 								}
 								
