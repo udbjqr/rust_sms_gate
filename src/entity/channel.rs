@@ -327,6 +327,7 @@ impl Channel {
 						}
 						Some(Err(e)) => {
 							error!("解码出现错误,跳过当前消息。{}", e);
+							return;
 						}
 						None => {
 							info!("当前连接已经断开。。。。id:{}",self.id);
