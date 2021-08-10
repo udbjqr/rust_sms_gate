@@ -404,8 +404,9 @@ impl ProtocolImpl for Sgip {
 			Some(v) => v
 		};
 
+		let msg_fmt = json[MSG_FMT].as_u8().unwrap_or(15);
 		//编码以后的消息内容
-		let msg_content_code = match encode_msg_content(json[MSG_FMT].as_u8().unwrap_or(8),msg_content) {
+		let msg_content_code = match encode_msg_content(msg_fmt,msg_content) {
 			Ok(v) => v,
 			Err(e) => {
 				log::error!("字符串内容解码出现错误..json:{}.e:{}", json, e);
@@ -470,7 +471,7 @@ impl ProtocolImpl for Sgip {
 			fill_bytes_zero(&mut dst, dest_id, 21);//src_id 21
 			dst.put_u8(0); //TP_pid 1
 			dst.put_u8(if sms_len == 1 { 0 } else { 1 }); //tp_udhi 1
-			dst.put_u8(8); //Msg_Fmt 1
+			dst.put_u8(msg_fmt); //Msg_Fmt 1
 			dst.put_u32((this_msg_content.len() + msg_content_head_len) as u32); //Msg_Length
 			if msg_content_head_len > 0 {
 				dst.put_u8(5);
@@ -497,7 +498,7 @@ impl ProtocolImpl for Sgip {
 			Some(v) => v
 		};
 
-		let msg_format = json[MSG_FMT].as_u8().unwrap_or(8);
+		let msg_format = json[MSG_FMT].as_u8().unwrap_or(15);
 		//编码以后的消息内容
 		let msg_content_code = match encode_msg_content(msg_format,msg_content) {
 			Ok(v) => v,
