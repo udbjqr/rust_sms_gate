@@ -23,6 +23,8 @@
 
 #Log files
 **/log
+**/log2
+**/log3
 **/logs
 
 #apidoc
