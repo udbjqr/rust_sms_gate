@@ -22,8 +22,8 @@ fn main() {
 	log4rs::init_file("config/log_client.yaml", Default::default()).unwrap();
 
 	get_runtime().spawn(async move {
-		// let addr = "47.114.180.42:7890".parse().unwrap();
-		let addr = "127.0.0.1:7890".parse().unwrap();
+		let addr = "47.114.180.42:7890".parse().unwrap();
+		// let addr = "127.0.0.1:7890".parse().unwrap();
 		let socket = TcpSocket::new_v4().unwrap();
 		println!("连接服务器：{:?}",socket);
 		let stream = socket.connect(addr).await.unwrap();
@@ -35,7 +35,7 @@ fn main() {
 		let mut login_msg = json::object! {
 				// loginName: "101094",
 				// password: "aTt1ZIo^Mp^6",
-				loginName: "166992",
+				loginName: "998877",
 				spId:"106902",
 				password: "123456",
 				protocolVersion: 0x30u32,
@@ -114,10 +114,10 @@ async fn start_work(framed: &mut Framed<TcpStream, Protocol>, protocol: Protocol
 			msg_content: "【睦霖集团】这个测试，一会回上行。",
 			serviceId: "10683074",
 			spId: "10683074",
-			src_id: "1068307455555",
+			src_id: "1068307455",
 			msg_type:"Submit",
 			dest_ids:[
-				"13121958888"
+				"18179156296"
 			],
 			msg_ids:["061614401994803057760"]
 		};
@@ -126,28 +126,30 @@ async fn start_work(framed: &mut Framed<TcpStream, Protocol>, protocol: Protocol
 			msg_content: "【睦霖集团】这个测试，一会回上行。",
 			serviceId: "10683074",
 			spId: "10683074",
-			src_id: "1068307455555",
+			src_id: "1068307455",
 			msg_type:"Submit",
 			dest_ids:[
 				"18179156296"
 			],
 			msg_ids:["061614401994803057760"]
 		};
-		for d in 0..1000 {
+		let mut dd = 10000000u64;
+		for d in 0..1 {
 			
 			tokio::time::sleep(Duration::from_millis(1000)).await;
 
-			for i in 0..200 {
+			for i in 0..10 {
 				//修改内容		
 				let mut js = json.clone();
 				let mut js2 = json2.clone();
-				js["msg_content"] = i.to_string().into();
-				js2["msg_content"] = i.to_string().into();
+				// js["msg_content"] = i.to_string().into();
+				// js2["msg_content"] = i.to_string().into();
 				
-				if let Err(e) = tx.send(js) {
-					println!("发送消息错误:{}", e);
-				}
-
+				// if let Err(e) = tx.send(js) {
+				// 	println!("发送消息错误:{}", e);
+				// }
+				dd += 1;
+				js2["msg_content"] = (String::from("cdefgxxxx") + dd.to_string().as_str()).into();
 				if let Err(e) = tx.send(js2) {
 					println!("发送消息错误:{}", e);
 				}

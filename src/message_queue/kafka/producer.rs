@@ -12,10 +12,13 @@ pub struct KafkaMessageProducer {
 impl KafkaMessageProducer {
 	pub fn new(brokers: &str) -> Self {
 		KafkaMessageProducer {
-			producer:
-			ClientConfig::new()
+			producer: ClientConfig::new()
 				.set("bootstrap.servers", brokers)
-				.set("message.timeout.ms", "5000")
+				.set("linger.ms", "100")
+				.set("metadata.request.timeout.ms", "10000")
+				.set("socket.keepalive.enable", "true")
+				.set("queue.buffering.max.ms", "3")
+				.set("message.send.max.retries", "10")
 				.create()
 				.expect("Producer creation error"),
 		}
@@ -23,7 +26,7 @@ impl KafkaMessageProducer {
 
 	pub async fn send(&self, topic: &'static str, key: &'static str, msg: String) {
 		let producer = self.producer.clone();
-		get_runtime().spawn(async move{
+		get_runtime().spawn(async move {
 			let mut record = FutureRecord::to(topic);
 			record = record.key(key).payload(msg.as_str());
 

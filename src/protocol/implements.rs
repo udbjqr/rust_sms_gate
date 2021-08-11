@@ -524,7 +524,7 @@ pub trait ProtocolImpl: Send + Sync {
 			Some(v) => v
 		};
 
-		let msg_fmt = json[MSG_FMT].as_u8().unwrap_or(15);
+		let msg_fmt = json[MSG_FMT].as_u8().unwrap_or(8);
 		//编码以后的消息内容
 		let msg_content_code = match encode_msg_content(msg_fmt,msg_content) {
 			Ok(v) => v,
@@ -634,7 +634,7 @@ pub trait ProtocolImpl: Send + Sync {
 			Some(v) => v
 		};
 
-		let msg_fmt = json[MSG_FMT].as_u8().unwrap_or(15);
+		let msg_fmt = json[MSG_FMT].as_u8().unwrap_or(8);
 		//编码以后的消息内容
 		let msg_content_code = match encode_msg_content(msg_fmt,msg_content) {
 			Ok(v) => v,

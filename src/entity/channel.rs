@@ -310,7 +310,7 @@ impl Channel {
 								}
 								
 							} else {
-								// 超出,返回流量超出
+								// 超出,返回流量超出的处理
 								if let Some(resp) = self.protocol.encode_receipt(SmsStatus::TrafficRestrictions, &mut json) {
 									log::debug!("当前超出流量.json:{}.已发:{}.可发:{}", json, curr_rx, self.rx_limit);
 
@@ -338,7 +338,7 @@ impl Channel {
 						}
 				  }
 				}
-				//用来判断限制发送窗口期已过
+				//用来判断限制发送窗口期已过。。
 				_ = time::sleep(Instant::now() - timestamp),if curr_tx >= self.tx_limit => {}
 				_ = time::sleep(one_secs) => {
 					//这里就是用来当全部都没有动作的时间打开再次进行循环.
