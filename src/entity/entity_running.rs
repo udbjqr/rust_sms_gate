@@ -3,9 +3,9 @@ use json::JsonValue;
 use std::sync::Arc;
 use crate::entity::{ChannelStates, EntityType};
 use std::collections::HashMap;
-use crate::protocol::names::{ACCOUNT_MSG_ID, MSG_TYPE_U32, CAN_WRITE, DEST_ID, DEST_IDS, DURATION, ENTITY_ID, ID, IS_PRIORITY, LONG_SMS_NOW_NUMBER, LONG_SMS_TOTAL, MANAGER_TYPE, MSG_CONTENT, MSG_ID, MSG_IDS, MSG_TYPE_STR, NEED_RE_SEND, NODE_ID, PASSAGE_MSG_ID, RECEIVE_TIME, SEQ_ID, SEQ_IDS, SERVICE_ID, SP_ID, SRC_ID, STATE, WAIT_RECEIPT};
+use crate::protocol::names::{ACCOUNT_MSG_ID, BUFFER_FULL, SPEED_LIMIT, CAN_WRITE, DEST_ID, DEST_IDS, DURATION, ENTITY_ID, ID, IS_PRIORITY, LONG_SMS_NOW_NUMBER, LONG_SMS_TOTAL, MANAGER_TYPE, MSG_CONTENT, MSG_ID, MSG_IDS, MSG_TYPE_STR, MSG_TYPE_U32, NEED_RE_SEND, NODE_ID, PASSAGE_MSG_ID, RECEIVE_TIME, SEQ_ID, SEQ_IDS, SERVICE_ID, SP_ID, SRC_ID, STATE, WAIT_RECEIPT};
 use crate::protocol::MsgType;
-use crate::global::{TEMP_SAVE, message_sender, TOPIC_TO_B_SUBMIT, TOPIC_TO_B_DELIVER, TOPIC_TO_B_DELIVER_RESP, TOPIC_TO_B_SUBMIT_RESP, TOPIC_TO_B_REPORT_RESP, TOPIC_TO_B_REPORT, TOPIC_TO_B_FAILURE, TOPIC_TO_B_PASSAGE_STATE_CHANGE, TOPIC_TO_B_ACCOUNT_STATE_CHANGE};
+use crate::global::{CHANNEL_BUFF_NUM, TEMP_SAVE, TOPIC_TO_B_ACCOUNT_STATE_CHANGE, TOPIC_TO_B_DELIVER, TOPIC_TO_B_DELIVER_RESP, TOPIC_TO_B_FAILURE, TOPIC_TO_B_PASSAGE_STATE_CHANGE, TOPIC_TO_B_REPORT, TOPIC_TO_B_REPORT_RESP, TOPIC_TO_B_SUBMIT, TOPIC_TO_B_SUBMIT_RESP, message_sender};
 use crate::message_queue::KafkaMessageProducer;
 use std::ops::{Add};
 use std::sync::atomic::AtomicU8;
@@ -13,7 +13,6 @@ use std::sync::atomic::Ordering::SeqCst;
 use std::fmt::{Display, Formatter, Error};
 use std::result;
 
-#[macro_use]
 ///把超时的消息进行重发
 macro_rules! re_send {
   ($target: expr) => (
@@ -25,7 +24,7 @@ macro_rules! re_send {
 			let receive_time = v[RECEIVE_TIME].as_i64().unwrap_or(0);
 			let duration = v[DURATION].as_i64().unwrap_or(30i64);
 
-			//如果超时或者需要重发.
+			//如果超时并且需要重发.
 			if (receive_time + duration) < now && v[NEED_RE_SEND].as_bool().unwrap_or(true) {
 				re_sends.push(v.to_owned());
 				v[DURATION] = (duration + duration).into();
@@ -52,6 +51,17 @@ macro_rules! send_to_queue {
 	)
 }
 
+
+macro_rules! send_entity_state {
+	($target: expr) => (
+		match $target.entity_type {
+			EntityType::Custom => $target.to_queue.send(TOPIC_TO_B_ACCOUNT_STATE_CHANGE, "", $target.state_change_json.to_string()).await,
+			EntityType::Server => $target.to_queue.send(TOPIC_TO_B_PASSAGE_STATE_CHANGE, "", $target.state_change_json.to_string()).await,
+		}
+	);
+}
+
+
 struct EntityRunContext {
 	entity_id: u32,
 	entity_type: EntityType,
@@ -65,6 +75,7 @@ struct EntityRunContext {
 	to_queue: Arc<KafkaMessageProducer>,
 	now_conn_num: Arc<AtomicU8>,
 	state_change_json: JsonValue,
+	send_buff_cap : u32,
 }
 
 impl Display for EntityRunContext {
@@ -73,8 +84,23 @@ impl Display for EntityRunContext {
 	}
 }
 
-pub async fn start_entity(mut manager_to_entity_rx: mpsc::
-Receiver<JsonValue>, mut from_channel: mpsc::Receiver<JsonValue>, entity_id: u32, service_id: String, sp_id: String, node_id: u32, now_conn_num: Arc<AtomicU8>, entity_type: EntityType) {
+pub async fn start_entity(
+	mut manager_to_entity_rx: mpsc::Receiver<JsonValue>, 
+	mut from_channel: mpsc::Receiver<JsonValue>, 
+	entity_id: u32, 
+	service_id: String, 
+	sp_id: String, 
+	node_id: u32, 
+	now_conn_num: Arc<AtomicU8>, 
+	entity_type: EntityType,
+	send_buff_cap: u32
+) {
+	let send_buff_cap = if send_buff_cap == 0 {
+		CHANNEL_BUFF_NUM
+	} else {
+		send_buff_cap
+	};
+
 	let mut context = EntityRunContext {
 		entity_id,
 		entity_type,
@@ -88,11 +114,13 @@ Receiver<JsonValue>, mut from_channel: mpsc::Receiver<JsonValue>, entity_id: u32
 		to_queue: message_sender().clone(),
 		now_conn_num,
 		state_change_json: json::object! {
-						msg_type: "PassageStateChange",
-						id: entity_id,
-						state: 0
-					},
+			msg_type: "PassageStateChange",
+			id: entity_id,
+			state: 0
+		},
+		send_buff_cap,
 	};
+
 	log::info!("新开始一个entity.{}", context);
 
 	let mut clear_msg_timestamp = chrono::Local::now().timestamp();
@@ -185,11 +213,19 @@ async fn handle_from_channel_rx(msg: Option<JsonValue>, context: &mut EntityRunC
 							if let Some(mut source) = context.wait_receipt_map.remove(&get_key(&msg)) {
 								log::trace!("收到submit回执..移除缓存:{}", source);
 
-								msg[ACCOUNT_MSG_ID] = source.remove(ACCOUNT_MSG_ID);
-								msg[PASSAGE_MSG_ID] = msg.remove(MSG_ID);
+								//收到的消息是已超速，压回去，等待后续发送。
+								if msg[SPEED_LIMIT].as_bool().unwrap_or(false) {
+									msg.remove(SPEED_LIMIT);
+									send_to_channels(msg, context).await;
+								} else {
+									msg[ACCOUNT_MSG_ID] = source.remove(ACCOUNT_MSG_ID);
+									msg[PASSAGE_MSG_ID] = msg.remove(MSG_ID);
+									
+									send_to_queue!(&context.to_queue, TOPIC_TO_B_SUBMIT_RESP, "", msg);
+								}
+							} else { //当未找到回执的时候，也发送收到的消息
+								send_to_queue!(&context.to_queue, TOPIC_TO_B_SUBMIT_RESP, "", msg);
 							}
-
-							send_to_queue!(&context.to_queue, TOPIC_TO_B_SUBMIT_RESP, "", msg);
 						}
 						//发送需要等待回执
 						(MsgType::Submit, Some(true)) => {
@@ -281,7 +317,7 @@ async fn handle_from_channel_rx(msg: Option<JsonValue>, context: &mut EntityRunC
 							//已经没有连接了.向外发连接断开消息
 							if context.send_channels.len() == 0 {
 								context.state_change_json[STATE] = 0.into();
-								send_entity_state(context).await;
+								send_entity_state!(context);
 							}
 						}
 						//有通道连接上了
@@ -301,7 +337,7 @@ async fn handle_from_channel_rx(msg: Option<JsonValue>, context: &mut EntityRunC
 									//如果原连接数是0.转成现在有的话.向外发送已经连接消息
 									if context.now_conn_num.load(SeqCst) == 0 {
 										context.state_change_json[STATE] = 1.into();
-										send_entity_state(context).await;
+										send_entity_state!(context);
 									}
 
 									context.now_conn_num.swap(context.send_channels.len() as u8, SeqCst);
@@ -452,7 +488,7 @@ async fn handle_from_manager_rx(msg: Option<JsonValue>, context: &mut EntityRunC
 				Some("passage.request.state") => {
 					log::info!("收到需要状态的消息。id:{}", context.entity_id);
 
-					send_entity_state(context).await;
+					send_entity_state!(context);
 				}
 				Some("close") => {
 					log::debug!("开始进行实体的关闭操作。id:{}", context.entity_id);
@@ -464,7 +500,7 @@ async fn handle_from_manager_rx(msg: Option<JsonValue>, context: &mut EntityRunC
 					}
 
 					context.state_change_json[STATE] = 0.into();
-					send_entity_state(context).await;
+					send_entity_state!(context);
 					return false;
 				}
 				None => {
@@ -508,17 +544,31 @@ async fn send_to_channels(msg: JsonValue, context: &mut EntityRunContext) {
 				if select.can_write {
 					log::debug!("收到消息.分channel发送。通道:{}", &select.id);
 
-					if priority {
-						if let Err(e) = select.entity_to_channel_priority_tx.send(send_msg).await {
-							log::error!("发送正常消息出现异常.e:{}", e);
-							failure = Some((e.0, select.id));
+					//判断是否已经超出指定缓冲区大小
+					let buff_num = CHANNEL_BUFF_NUM - (select.entity_to_channel_priority_tx.capacity() + select.entity_to_channel_common_tx.capacity()) as u32;
+					if buff_num > context.send_buff_cap && !context.state_change_json[BUFFER_FULL].as_bool().unwrap_or(false) 
+						|| buff_num > (context.send_buff_cap * 2) //当缓存中的数量大于2倍，一直发，1倍时只发一次
+					{
+						context.state_change_json[BUFFER_FULL] = true.into();
+						send_entity_state!(context);
+					} else if buff_num < context.send_buff_cap / 2 {
+						if context.state_change_json.contains(BUFFER_FULL) {
+							send_entity_state!(context);
 						}
-					} else {
-						if let Err(e) = select.entity_to_channel_common_tx.send(send_msg).await {
-							log::error!("发送正常消息出现异常.e:{}", e);
-							failure = Some((e.0, select.id));
-						}
+						context.state_change_json.remove(BUFFER_FULL);
 					}
+
+					let send = if priority {
+						&select.entity_to_channel_priority_tx
+					} else {
+						&select.entity_to_channel_common_tx
+					};
+
+					if let Err(e) = send.send(send_msg).await {
+						log::error!("发送正常消息出现异常.e:{}", e);
+						failure = Some((e.0, select.id));
+					}
+
 				} else {
 					continue;
 				}
@@ -544,11 +594,4 @@ async fn send_to_channels(msg: JsonValue, context: &mut EntityRunContext) {
 	//只有一个通道都没有的时候，才会走到这里.返回错误.同时发连接断开消息
 	context.to_queue.send(TOPIC_TO_B_FAILURE, "", send_msg.to_string()).await;
 	context.state_change_json[STATE] = 0.into();
-}
-
-async fn send_entity_state(context: &mut EntityRunContext) {
-	match context.entity_type {
-		EntityType::Custom => context.to_queue.send(TOPIC_TO_B_ACCOUNT_STATE_CHANGE, "", context.state_change_json.to_string()).await,
-		EntityType::Server => context.to_queue.send(TOPIC_TO_B_PASSAGE_STATE_CHANGE, "", context.state_change_json.to_string()).await,
-	}
 }

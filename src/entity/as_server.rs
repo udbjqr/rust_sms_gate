@@ -10,7 +10,7 @@ use crate::entity::{Entity, start_entity, EntityType};
 use crate::entity::channel::Channel;
 use crate::get_runtime;
 use crate::protocol::{SmsStatus, Protocol};
-use crate::global::{TEMP_SAVE, get_sequence_id};
+use crate::global::{CHANNEL_BUFF_NUM, TEMP_SAVE, get_sequence_id};
 
 
 ///用来连接服务端（上游）
@@ -38,6 +38,7 @@ pub struct ServerEntity {
 	//服务器可以连接过来的数量
 	server_connect_number: usize,
 	node_id:u32,
+	max_buff_cap: u32,
 }
 
 impl ServerEntity {
@@ -56,6 +57,7 @@ impl ServerEntity {
 						 gateway_login_name: String,
 						 gateway_password: String,
 						 node_id:u32,
+						 max_buff_cap: u32,
 	           config: JsonValue,
 	           send_to_manager_tx: mpsc::Sender<JsonValue>,
 	) -> Self {
@@ -87,6 +89,7 @@ impl ServerEntity {
 			gateway_password,
 			server_connect_number,
 			node_id,
+			max_buff_cap,
 		}
 	}
 	///开启一个entity的启动。连接对端,准备接收数据等
@@ -97,7 +100,17 @@ impl ServerEntity {
 		let (channel_to_entity_tx, channel_to_entity_rx) = mpsc::channel(self.read_limit as usize);
 
 		//这里开始自己的消息处理
-		get_runtime().spawn(start_entity(manage_to_entity_rx, channel_to_entity_rx, self.id, self.service_id.clone(), self.sp_id.clone(),self.node_id, self.now_channel_number.clone(), EntityType::Server));
+		get_runtime().spawn(start_entity(
+			manage_to_entity_rx, 
+			channel_to_entity_rx, 
+			self.id, 
+			self.service_id.clone(), 
+			self.sp_id.clone(),
+			self.node_id, 
+			self.now_channel_number.clone(), 
+			EntityType::Server,
+			self.max_buff_cap
+		));
 
 		self.channel_to_entity_tx = Some(channel_to_entity_tx);
 
@@ -171,8 +184,8 @@ impl Entity for ServerEntity {
 		}
 
 		//通过后进行附加上去的动作。
-		let (entity_to_channel_priority_tx, entity_to_channel_priority_rx) = mpsc::channel(0xffffffff);
-		let (entity_to_channel_common_tx, entity_to_channel_common_rx) = mpsc::channel(0xffffffff);
+		let (entity_to_channel_priority_tx, entity_to_channel_priority_rx) = mpsc::channel(CHANNEL_BUFF_NUM as usize);
+		let (entity_to_channel_common_tx, entity_to_channel_common_rx) = mpsc::channel(CHANNEL_BUFF_NUM as usize);
 		let channel_to_entity_tx = self.channel_to_entity_tx.as_ref().unwrap().clone();
 
 		let index = get_sequence_id(1);

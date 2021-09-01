@@ -40,13 +40,16 @@ pub static TOPIC_FROM_B_SUBMIT: &'static str = "send.submit";
 pub static TOPIC_FROM_B_DELIVER: &'static str = "send.deliver";
 pub static TOPIC_FROM_B_REPORT: &'static str = "send.report";
 
+/// 通道指定的最大的缓冲区数量。
+pub static CHANNEL_BUFF_NUM: u32 = 0xFFFFFFFF;
+
 
 lazy_static! {
 	static ref CONFIG: RwLock<JsonValue> = RwLock::new(load_config_file("config/setting.json"));
 	static ref SEQUENCE: AtomicU32 = AtomicU32::new(rand::random());
 	pub static ref FILL_ZERO: Vec<u8> = vec![0;200];
 	pub static ref ISMG_ID: u32 = rand::random::<u32>() % 1000000;
-		pub static ref TEMP_SAVE:RwLock<HashMap<u32,(mpsc::Sender<JsonValue>,mpsc::Sender<JsonValue>)>> = RwLock::new(HashMap::new());
+	pub static ref TEMP_SAVE:RwLock<HashMap<u32,(mpsc::Sender<JsonValue>,mpsc::Sender<JsonValue>)>> = RwLock::new(HashMap::new());
 	// static ref SERVERS_CONFIG: RwLock<JsonValue> = RwLock::new(load_config_file("smsServer.json"));
 }
 

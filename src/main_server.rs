@@ -246,7 +246,8 @@ async fn start_service(host: String, server_type: Protocol) {
 }
 
 async fn return_msg(json: JsonValue,protocol: Protocol,sender: Sender<JsonValue>){
-	let time = rand::random::<u64>() % 2000 + 50u64;
+	// let time = rand::random::<u64>() % 2000 + 50u64;
+	let time = 5000;
 	let duration = Duration::from_millis(time);
 	tokio::time::sleep(duration).await;
 	let d = json[DEST_IDS][0].as_str().unwrap_or("");

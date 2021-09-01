@@ -10,7 +10,7 @@ use tokio_util::codec::Framed;
 use crate::entity::EntityManager;
 use crate::get_runtime;
 use crate::protocol::{MsgType, SmsStatus::{self, MessageError, Success}, Protocol};
-use crate::protocol::names::{ADDRESS, CAN_WRITE, ENTITY_ID, ID, LOGIN_NAME, MSG_TYPE_STR, STATUS, VERSION, WAIT_RECEIPT};
+use crate::protocol::names::{ADDRESS, CAN_WRITE, ENTITY_ID, ID, LOGIN_NAME, MSG_IDS, MSG_TYPE_STR, SPEED_LIMIT, STATUS, VERSION, WAIT_RECEIPT};
 use std::time::{Instant};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use crate::global::{message_sender, TOPIC_TO_B_FAILURE};
@@ -214,20 +214,34 @@ impl Channel {
 			//根据当前是否已经发满。发送当前是否可用数据。
 			tokio::select! {
 				biased;
-				msg = entity_to_channel_priority_rx.recv(),if curr_tx < self.tx_limit => {
+				msg = entity_to_channel_priority_rx.recv(), if curr_tx < self.tx_limit => {
 					idle_count = 0;
 					match msg {
 						Some(mut send) => {
 							log::debug!("priority收到entity发来的消息.msg:{}",send);
+							let msg_num = send[MSG_IDS].len() as u32;
+
+							if msg_num + curr_tx > self.tx_limit {
+								log::trace!("长短信长度大于可发送长度。返回满。msg_num:{},curr_tx:{},tx_limit:{}", msg_num, curr_tx, self.tx_limit);
+								send[SPEED_LIMIT] = true.into();
+
+								if let Err(e) = channel_to_entity_tx.send(send).await {
+									log::error!("向实体发送消息出现异常, e:{}", e);
+									return;
+								}
+								continue;
+							}
+
 							//接收发来的消息。并处理
 							if let Ok(msg) = self.protocol.encode_message(&mut send) {
 								log::info!("{}向对端发送消息{}", self.id, &send);
+
 								if let Err(e) = framed.send(msg).await {
 									error!("发送消息出现错误, e:{}", e);
 									message_sender().send(TOPIC_TO_B_FAILURE, "3", send.to_string()).await;
 								} else {
 									// 计数加1
-									curr_tx = curr_tx + 1;
+									curr_tx = curr_tx + msg_num;
 									//把要等待回复的消息再发送回实体
 									send[WAIT_RECEIPT] = true.into();
 									if let Err(e) = channel_to_entity_tx.send(send).await {
@@ -249,6 +263,19 @@ impl Channel {
 					match msg {
 						Some(mut send) => {
 							log::debug!("common收到entity发来的消息.msg:{}",send);
+							let msg_num = send[MSG_IDS].len() as u32;
+
+							if msg_num + curr_tx > self.tx_limit {
+								log::trace!("长短信长度大于可发送长度。返回满。msg_num:{},curr_tx:{},tx_limit:{}", msg_num, curr_tx, self.tx_limit);
+								send[SPEED_LIMIT] = true.into();
+								
+								if let Err(e) = channel_to_entity_tx.send(send).await {
+									log::error!("向实体发送消息出现异常, e:{}", e);
+									return;
+								}
+								continue;
+							}
+
 							//接收发来的消息。并处理
 							if let Ok(msg) = self.protocol.encode_message(&mut send) {
 								log::info!("{}向对端发送消息{}", self.id, &send);
@@ -256,7 +283,7 @@ impl Channel {
 									error!("发送回执出现错误, e:{}", e);
 								} else {
 									// 成功计数加1
-									curr_tx = curr_tx + 1;
+									curr_tx = curr_tx + msg_num;
 									//把要等待回复的消息再发送回实体
 									send[WAIT_RECEIPT] = true.into();
 									if let Err(e) = channel_to_entity_tx.send(send).await {

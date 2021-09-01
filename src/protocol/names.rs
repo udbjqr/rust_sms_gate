@@ -52,6 +52,9 @@ pub static MAX_CHANNEL_NUMBER: &'static str = "connNum";
 pub static WRITE_LIMIT: &'static str = "writeLimit";
 pub static NAME: &'static str = "name";
 pub static OP_NAME: &'static str = "op_name";
+pub static BUFFER_FULL: &'static str = "buffer_full";
+pub static MAX_BUFF_CAP: &'static str = "maxBuffCap";
+
 ///上游连接我方时的账号
 pub static GATEWAY_LOGIN_NAME: &'static str = "gatewayServerUsername";
 ///上游连接我方时的密码

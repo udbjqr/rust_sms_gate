@@ -15,7 +15,7 @@ impl KafkaMessageProducer {
 			producer: ClientConfig::new()
 				.set("bootstrap.servers", brokers)
 				.set("linger.ms", "100")
-				.set("metadata.request.timeout.ms", "10000")
+				.set("metadata.request.timeout.ms", "10000")			
 				.set("socket.keepalive.enable", "true")
 				.set("queue.buffering.max.ms", "3")
 				.set("message.send.max.retries", "10")

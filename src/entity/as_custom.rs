@@ -1,5 +1,6 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, AtomicU8, Ordering};
+use std::usize;
 
 use async_trait::async_trait;
 use json::JsonValue;
@@ -8,7 +9,7 @@ use tokio::sync::{mpsc};
 use crate::entity::{Entity, start_entity, EntityType};
 use crate::get_runtime;
 use crate::protocol::{SmsStatus};
-use crate::global::{TEMP_SAVE, get_sequence_id};
+use crate::global::{CHANNEL_BUFF_NUM, TEMP_SAVE, get_sequence_id};
 
 ///用来连接客户（下游）
 #[derive(Debug)]
@@ -75,7 +76,17 @@ impl CustomEntity {
 
 		log::info!("通道{},,开始启动处理消息.", self.name);
 		//这里开始自己的消息处理
-		get_runtime().spawn(start_entity(manage_to_entity_rx, channel_to_entity_rx, self.id, self.service_id.clone(), self.sp_id.clone(),0, self.now_channel_number.clone(), EntityType::Custom));
+		get_runtime().spawn(start_entity(
+			manage_to_entity_rx, 
+			channel_to_entity_rx, 
+			self.id, 
+			self.service_id.clone(), 
+			self.sp_id.clone(),
+			0, 
+			self.now_channel_number.clone(), 
+			EntityType::Custom,
+			0,
+		));
 
 		self.channel_to_entity_tx = Some(channel_to_entity_tx);
 
@@ -92,8 +103,8 @@ impl Entity for CustomEntity {
 		}
 
 		//通过后进行附加上去的动作。
-		let (entity_to_channel_priority_tx, entity_to_channel_priority_rx) = mpsc::channel(0xffffffff);
-		let (entity_to_channel_common_tx, entity_to_channel_common_rx) = mpsc::channel(0xffffffff);
+		let (entity_to_channel_priority_tx, entity_to_channel_priority_rx) = mpsc::channel(CHANNEL_BUFF_NUM as usize);
+		let (entity_to_channel_common_tx, entity_to_channel_common_rx) = mpsc::channel(CHANNEL_BUFF_NUM as usize);
 		let channel_to_entity_tx = self.channel_to_entity_tx.as_ref().unwrap().clone();
 
 		// item.is_active = true;

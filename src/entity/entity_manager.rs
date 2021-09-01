@@ -13,7 +13,7 @@ use crate::entity::{CustomEntity, Entity};
 use crate::entity::as_server::ServerEntity;
 use crate::get_runtime;
 use crate::global::{load_config_file, TOPIC_FROM_B_SUBMIT, TOPIC_FROM_B_DELIVER, TOPIC_FROM_B_REPORT, TOPIC_PASSAGE_REQUEST_STATE};
-use crate::protocol::names::{ADDRESS, ALLOW_ADDRS, CROP_ID, GATEWAY_LOGIN_NAME, GATEWAY_PASSWORD, LOGIN_NAME, MANAGER_TYPE, MAX_CHANNEL_NUMBER, NAME, NODE_ID, OP_NAME, PASSWORD, PROTOCOL, READ_LIMIT, SERVICE_ID, SP_ID, VERSION, WRITE_LIMIT};
+use crate::protocol::names::{ADDRESS, ALLOW_ADDRS, CROP_ID, GATEWAY_LOGIN_NAME, GATEWAY_PASSWORD, LOGIN_NAME, MANAGER_TYPE,MAX_BUFF_CAP, MAX_CHANNEL_NUMBER, NAME, NODE_ID, OP_NAME, PASSWORD, PROTOCOL, READ_LIMIT, SERVICE_ID, SP_ID, VERSION, WRITE_LIMIT};
 
 ///实体的管理对象。
 /// 负责处理消息队列送过来的实体的开启、关闭等操作
@@ -289,6 +289,7 @@ async fn handle_queue_msg(topic: &str, mut json: JsonValue, context: &mut RunCon
 					json[GATEWAY_LOGIN_NAME].as_str().unwrap_or("").to_string(),
 					json[GATEWAY_PASSWORD].as_str().unwrap_or("").to_string(),
 					json[NODE_ID].as_str().unwrap_or("0").parse().unwrap_or(0),
+					json[MAX_BUFF_CAP].as_u32().unwrap_or(0),
 					json,
 					context.entity_to_manager_tx.clone(),
 				));

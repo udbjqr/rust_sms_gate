@@ -18,12 +18,12 @@ use sms_gate::protocol::smgp::Smgp30;
 use futures::task::SpawnExt;
 
 fn main() {
-	// simple_logger::SimpleLogger::init(Default::default());
-	log4rs::init_file("config/log_client.yaml", Default::default()).unwrap();
+	simple_logger::SimpleLogger::init(Default::default());
+	// log4rs::init_file("config/log_client.yaml", Default::default()).unwrap();
 
 	get_runtime().spawn(async move {
-		let addr = "47.114.180.42:7890".parse().unwrap();
-		// let addr = "127.0.0.1:7890".parse().unwrap();
+		// let addr = "47.114.180.42:7890".parse().unwrap();
+		let addr = "127.0.0.1:7890".parse().unwrap();
 		let socket = TcpSocket::new_v4().unwrap();
 		println!("连接服务器：{:?}",socket);
 		let stream = socket.connect(addr).await.unwrap();
@@ -35,7 +35,8 @@ fn main() {
 		let mut login_msg = json::object! {
 				// loginName: "101094",
 				// password: "aTt1ZIo^Mp^6",
-				loginName: "998877",
+				// loginName: "998877",
+				loginName: "636939",
 				spId:"106902",
 				password: "123456",
 				protocolVersion: 0x30u32,
@@ -111,7 +112,7 @@ async fn start_work(framed: &mut Framed<TcpStream, Protocol>, protocol: Protocol
 	get_runtime().spawn(async move {
 		let mut count = 0u32;
 		let json = json::object! {
-			msg_content: "【睦霖集团】这个测试，一会回上行。",
+			msg_content: "【万位科技】快递，详情孙**",
 			serviceId: "10683074",
 			spId: "10683074",
 			src_id: "1068307455",
@@ -123,7 +124,7 @@ async fn start_work(framed: &mut Framed<TcpStream, Protocol>, protocol: Protocol
 		};
 
 		let json2 = json::object! {
-			msg_content: "【睦霖集团】这个测试，一会回上行。",
+			msg_content: "【日上免税行】尊敬的顾客您好，您的订单已提交成功。 订单号:BA72067572 配货单:Y992108769798 收件人:徐静 收件人联系电话:15863941010 商品数量:1 在线客服s.srgow.com",
 			serviceId: "10683074",
 			spId: "10683074",
 			src_id: "1068307455",
@@ -133,12 +134,10 @@ async fn start_work(framed: &mut Framed<TcpStream, Protocol>, protocol: Protocol
 			],
 			msg_ids:["061614401994803057760"]
 		};
-		let mut dd = 10000000u64;
 		for d in 0..1 {
-			
-			tokio::time::sleep(Duration::from_millis(1000)).await;
+			tokio::time::sleep(Duration::from_millis(2000)).await;
 
-			for i in 0..10 {
+			for i in 0..1 {
 				//修改内容		
 				let mut js = json.clone();
 				let mut js2 = json2.clone();
@@ -148,8 +147,6 @@ async fn start_work(framed: &mut Framed<TcpStream, Protocol>, protocol: Protocol
 				// if let Err(e) = tx.send(js) {
 				// 	println!("发送消息错误:{}", e);
 				// }
-				dd += 1;
-				js2["msg_content"] = (String::from("cdefgxxxx") + dd.to_string().as_str()).into();
 				if let Err(e) = tx.send(js2) {
 					println!("发送消息错误:{}", e);
 				}
