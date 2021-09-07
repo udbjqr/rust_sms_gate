@@ -98,6 +98,6 @@ loggers:
     additive: false
 
 root:
-  level: info
+  level: debug
   appenders:
     - all

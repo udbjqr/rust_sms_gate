@@ -77,6 +77,7 @@ async fn start_work(framed: &mut Framed<TcpStream, Protocol>,protocol: Protocol)
 	let mut curr_tx: u32 = 0;
 	let mut curr_rx: u32 = 0;
 	let mut idle_count: u16 = 0;
+	
 	let mut wait_active_resp = false;
 
 	let mut timestamp = Instant::now();

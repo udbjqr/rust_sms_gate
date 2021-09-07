@@ -41,7 +41,7 @@ pub static TOPIC_FROM_B_DELIVER: &'static str = "send.deliver";
 pub static TOPIC_FROM_B_REPORT: &'static str = "send.report";
 
 /// 通道指定的最大的缓冲区数量。
-pub static CHANNEL_BUFF_NUM: u32 = 0xFFFFFFFF;
+pub static CHANNEL_BUFF_NUM: usize = 0xFFFFFFFF;
 
 
 lazy_static! {

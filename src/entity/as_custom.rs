@@ -86,6 +86,7 @@ impl CustomEntity {
 			self.now_channel_number.clone(), 
 			EntityType::Custom,
 			0,
+			self.write_limit as usize,
 		));
 
 		self.channel_to_entity_tx = Some(channel_to_entity_tx);
@@ -103,8 +104,8 @@ impl Entity for CustomEntity {
 		}
 
 		//通过后进行附加上去的动作。
-		let (entity_to_channel_priority_tx, entity_to_channel_priority_rx) = mpsc::channel(CHANNEL_BUFF_NUM as usize);
-		let (entity_to_channel_common_tx, entity_to_channel_common_rx) = mpsc::channel(CHANNEL_BUFF_NUM as usize);
+		let (entity_to_channel_priority_tx, entity_to_channel_priority_rx) = mpsc::channel(CHANNEL_BUFF_NUM);
+		let (entity_to_channel_common_tx, entity_to_channel_common_rx) = mpsc::channel(CHANNEL_BUFF_NUM);
 		let channel_to_entity_tx = self.channel_to_entity_tx.as_ref().unwrap().clone();
 
 		// item.is_active = true;

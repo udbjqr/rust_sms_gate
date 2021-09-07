@@ -38,7 +38,7 @@ pub struct ServerEntity {
 	//服务器可以连接过来的数量
 	server_connect_number: usize,
 	node_id:u32,
-	max_buff_cap: u32,
+	max_buff_cap: usize,
 }
 
 impl ServerEntity {
@@ -57,7 +57,7 @@ impl ServerEntity {
 						 gateway_login_name: String,
 						 gateway_password: String,
 						 node_id:u32,
-						 max_buff_cap: u32,
+						 max_buff_cap: usize,
 	           config: JsonValue,
 	           send_to_manager_tx: mpsc::Sender<JsonValue>,
 	) -> Self {
@@ -109,7 +109,8 @@ impl ServerEntity {
 			self.node_id, 
 			self.now_channel_number.clone(), 
 			EntityType::Server,
-			self.max_buff_cap
+			self.max_buff_cap,
+			self.write_limit as usize
 		));
 
 		self.channel_to_entity_tx = Some(channel_to_entity_tx);
@@ -184,8 +185,8 @@ impl Entity for ServerEntity {
 		}
 
 		//通过后进行附加上去的动作。
-		let (entity_to_channel_priority_tx, entity_to_channel_priority_rx) = mpsc::channel(CHANNEL_BUFF_NUM as usize);
-		let (entity_to_channel_common_tx, entity_to_channel_common_rx) = mpsc::channel(CHANNEL_BUFF_NUM as usize);
+		let (entity_to_channel_priority_tx, entity_to_channel_priority_rx) = mpsc::channel(CHANNEL_BUFF_NUM);
+		let (entity_to_channel_common_tx, entity_to_channel_common_rx) = mpsc::channel(CHANNEL_BUFF_NUM);
 		let channel_to_entity_tx = self.channel_to_entity_tx.as_ref().unwrap().clone();
 
 		let index = get_sequence_id(1);

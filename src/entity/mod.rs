@@ -111,7 +111,7 @@ pub struct ChannelStates {
 }
 
 
-#[derive(Debug)]
+#[derive(Debug,PartialEq)]
 pub enum EntityType {
 	Custom,
 	Server,

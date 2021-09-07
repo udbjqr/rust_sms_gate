@@ -22,13 +22,13 @@ fn main() {
 	// log4rs::init_file("config/log_client.yaml", Default::default()).unwrap();
 
 	get_runtime().spawn(async move {
-		// let addr = "47.114.180.42:7890".parse().unwrap();
-		let addr = "127.0.0.1:7890".parse().unwrap();
+		let addr = "47.114.180.42:7890".parse().unwrap();
+		// let addr = "127.0.0.1:7890".parse().unwrap();
 		let socket = TcpSocket::new_v4().unwrap();
-		println!("连接服务器：{:?}",socket);
+		log::debug!("连接服务器：{:?}",socket);
 		let stream = socket.connect(addr).await.unwrap();
 
-		println!("连接服务器：{:?}",stream);
+		log::debug!("连接服务器：{:?}",stream);
 		let mut protocol = Protocol::CMPP48(Cmpp48::new());
 		let mut framed = Framed::new(stream, protocol.clone());
 
@@ -36,7 +36,7 @@ fn main() {
 				// loginName: "101094",
 				// password: "aTt1ZIo^Mp^6",
 				// loginName: "998877",
-				loginName: "636939",
+				loginName: "998877",
 				spId:"106902",
 				password: "123456",
 				protocolVersion: 0x30u32,
@@ -46,7 +46,7 @@ fn main() {
 		match protocol.encode_message(&mut login_msg) {
 			Ok(msg) => framed.send(msg).await.unwrap(),
 			Err(e) => {
-				println!("生成消息出现异常。{}", e);
+				log::debug!("生成消息出现异常。{}", e);
 				return Err(io::Error::new(io::ErrorKind::InvalidData, e));
 			}
 		}
@@ -54,7 +54,7 @@ fn main() {
 		let result = match framed.next().await {
 			Some(Ok(mut resp)) => {
 				resp[ENTITY_ID] = 99.into();
-				println!("收到登录返回信息:{}", resp);
+				log::debug!("收到登录返回信息:{}", resp);
 
 				//判断返回类型和返回状态。
 				match (resp[MSG_TYPE_STR].as_str().unwrap_or("").into(),
@@ -62,23 +62,23 @@ fn main() {
 					(MsgType::ConnectResp, SmsStatus::Success) => {
 						if let Some(version) = resp[VERSION].as_u32() {
 							protocol = protocol.match_version(version);
-							println!("登录成功 ..更换版本.现在版本:{:?}", protocol);
+							log::debug!("登录成功 ..更换版本.现在版本:{:?}", protocol);
 						}
 
 						Some(())
 					}
 					_ => {
-						println!("登录被拒绝.msg:{}", resp);
+						log::debug!("登录被拒绝.msg:{}", resp);
 						None
 					}
 				}
 			}
 			Some(Err(e)) => {
-				println!("这里是解码错误?? err = {:?}", e);
+				log::debug!("这里是解码错误?? err = {:?}", e);
 				None
 			}
 			None => {
-				println!("连接已经断开");
+				log::debug!("连接已经断开");
 				None
 			}
 		};
@@ -99,7 +99,7 @@ struct Peer {
 
 
 async fn start_work(framed: &mut Framed<TcpStream, Protocol>, protocol: Protocol) {
-	println!("连接成功.channel准备处理数据.");
+	log::debug!("连接成功.channel准备处理数据.");
 
 	let mut active_test = json::object! {
 					msg_type : "ActiveTest"
@@ -120,35 +120,36 @@ async fn start_work(framed: &mut Framed<TcpStream, Protocol>, protocol: Protocol
 			dest_ids:[
 				"18179156296"
 			],
-			msg_ids:["061614401994803057760"]
+			msg_ids:[""]
 		};
 
 		let json2 = json::object! {
-			msg_content: "【日上免税行】尊敬的顾客您好，您的订单已提交成功。 订单号:BA72067572 配货单:Y992108769798 收件人:徐静 收件人联系电话:15863941010 商品数量:1 在线客服s.srgow.com",
-			serviceId: "10683074",
+			msg_content: "【三道杠】您好：您的[快钱快闪刷(华智融NEW6220_电签POS)],已由顺丰速运公司发出，单号SF1320787887036请注意查收！详情请查看 https://wxaurl.cn/jTcTtzSFhZb",
+			serviceId: "106902",
 			spId: "10683074",
-			src_id: "1068307455",
+			src_id: "1068307407455",
 			msg_type:"Submit",
 			dest_ids:[
 				"18179156296"
 			],
-			msg_ids:["061614401994803057760"]
+			msg_ids:[""]
 		};
-		for d in 0..1 {
-			tokio::time::sleep(Duration::from_millis(2000)).await;
 
+
+		for d in 0..1 {
+			tokio::time::sleep(one_secs).await;
 			for i in 0..1 {
 				//修改内容		
 				let mut js = json.clone();
 				let mut js2 = json2.clone();
 				// js["msg_content"] = i.to_string().into();
-				// js2["msg_content"] = i.to_string().into();
+				js2["msg_content"] = ((d*10000 + i).to_string() + "【启达互联】用户您好：经查询后台显示，运营商系统问题出现断网，现需给您重新补发。请扫描激活说明二维码联系在线客服并回复免费补卡信息，自行申请补卡。").into();
 				
 				// if let Err(e) = tx.send(js) {
-				// 	println!("发送消息错误:{}", e);
+				// 	log::debug!("发送消息错误:{}", e);
 				// }
 				if let Err(e) = tx.send(js2) {
-					println!("发送消息错误:{}", e);
+					log::debug!("发送消息错误:{}", e);
 				}
 
 			};
@@ -157,6 +158,8 @@ async fn start_work(framed: &mut Framed<TcpStream, Protocol>, protocol: Protocol
 
 	let mut peer = Peer { rx };
 
+	let mut succ_count = 0u32;
+	let mut fail_count = 0u32;
 	loop {
 		//根据当前是否已经发满。发送当前是否可用数据。
 		tokio::select! {
@@ -164,30 +167,36 @@ async fn start_work(framed: &mut Framed<TcpStream, Protocol>, protocol: Protocol
 				let mut msg = msg;
 				let send_msg = protocol.encode_message(&mut msg).unwrap();
 				if let Err(e) = framed.send(send_msg).await {
-						println!("发送出现错误:{}",e);
+						log::debug!("发送出现错误:{}",e);
 				}
 			}
 			msg = framed.next() => {
 			  match msg {
 			    Some(Ok(mut json)) => {
-						println!("通道收到消息:{}",&json);
+						log::debug!("通道收到消息:{}",&json);
 						//收到消息,生成回执...当收到的不是回执才回返回Some.
 						if let Some(resp) = protocol.encode_receipt(SmsStatus::Success, &mut json) {
+							if json["state"].as_str().unwrap_or("") == "DELIVRD" {
+								succ_count += 1;
+							} else {
+								fail_count += 1;
+							}
 							if let Err(e) = framed.send(resp).await {
-								println!("发送回执出现错误, e:{}", e);
+								log::debug!("发送回执出现错误, e:{}", e);
 							}
 						}
 					}
 					Some(Err(e)) => {
-						println!("解码出现错误,跳过当前消息。{}", e);
+						log::debug!("解码出现错误,跳过当前消息。{}", e);
 					}
 					None => {
-						println!("当前连接已经断开。。。。");
+						log::debug!("当前连接已经断开。。。。");
 						return;
 					}
 			  }
 			}
 			_ = tokio::time::sleep(one_secs) => {
+				log::debug!("收到的状态成功数：{},,失败数量：{}", succ_count, fail_count);
 				//这里就是用来当全部都没有动作的时间打开再次进行循环.
 				//空闲记数
 			}

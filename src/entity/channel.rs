@@ -11,7 +11,7 @@ use crate::entity::EntityManager;
 use crate::get_runtime;
 use crate::protocol::{MsgType, SmsStatus::{self, MessageError, Success}, Protocol};
 use crate::protocol::names::{ADDRESS, CAN_WRITE, ENTITY_ID, ID, LOGIN_NAME, MSG_IDS, MSG_TYPE_STR, SPEED_LIMIT, STATUS, VERSION, WAIT_RECEIPT};
-use std::time::{Instant};
+use std::time::{SystemTime, UNIX_EPOCH};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use crate::global::{message_sender, TOPIC_TO_B_FAILURE};
 
@@ -180,15 +180,15 @@ impl Channel {
 		let mut idle_count: u16 = 0;
 		let mut wait_active_resp = false;
 
-		let mut timestamp = Instant::now();
-		let one_secs = Duration::from_secs(1);
-
+		let one_secs = Duration::from_millis(1000);
+		let mut timestamp = SystemTime::now().duration_since(UNIX_EPOCH).expect("system time before Unix epoch");
 		loop {
-			//一个时间窗口过去.重新计算
-			if timestamp.elapsed() > one_secs {
+			let new_time = SystemTime::now().duration_since(UNIX_EPOCH).expect("system time before Unix epoch");
+			if new_time.as_secs() - timestamp.as_secs() >= 1 {
+				// log::debug!("恢复时间窗口");
 				curr_tx = 0;
 				curr_rx = 0;
-				timestamp = Instant::now();
+				timestamp = new_time;
 			}
 
 			//当空闲超过时间后发送心跳
@@ -220,6 +220,8 @@ impl Channel {
 						Some(mut send) => {
 							log::debug!("priority收到entity发来的消息.msg:{}",send);
 							let msg_num = send[MSG_IDS].len() as u32;
+
+							log::trace!("测试一下。msg_num:{},curr_tx:{},tx_limit:{}", msg_num, curr_tx, self.tx_limit);
 
 							if msg_num + curr_tx > self.tx_limit {
 								log::trace!("长短信长度大于可发送长度。返回满。msg_num:{},curr_tx:{},tx_limit:{}", msg_num, curr_tx, self.tx_limit);
@@ -265,10 +267,11 @@ impl Channel {
 							log::debug!("common收到entity发来的消息.msg:{}",send);
 							let msg_num = send[MSG_IDS].len() as u32;
 
+							log::trace!("测试一下。msg_num:{},curr_tx:{},tx_limit:{}", msg_num, curr_tx, self.tx_limit);
+
 							if msg_num + curr_tx > self.tx_limit {
 								log::trace!("长短信长度大于可发送长度。返回满。msg_num:{},curr_tx:{},tx_limit:{}", msg_num, curr_tx, self.tx_limit);
 								send[SPEED_LIMIT] = true.into();
-								
 								if let Err(e) = channel_to_entity_tx.send(send).await {
 									log::error!("向实体发送消息出现异常, e:{}", e);
 									return;
@@ -366,7 +369,7 @@ impl Channel {
 				  }
 				}
 				//用来判断限制发送窗口期已过。。
-				_ = time::sleep(Instant::now() - timestamp),if curr_tx >= self.tx_limit => {}
+				_ = time::sleep(Duration::from_micros(1_000_000u64 - timestamp.subsec_micros() as u64)),if curr_tx >= self.tx_limit => {}
 				_ = time::sleep(one_secs) => {
 					//这里就是用来当全部都没有动作的时间打开再次进行循环.
 					//空闲记数

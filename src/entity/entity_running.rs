@@ -3,7 +3,7 @@ use json::JsonValue;
 use std::sync::Arc;
 use crate::entity::{ChannelStates, EntityType};
 use std::collections::HashMap;
-use crate::protocol::names::{ACCOUNT_MSG_ID, BUFFER_FULL, SPEED_LIMIT, CAN_WRITE, DEST_ID, DEST_IDS, DURATION, ENTITY_ID, ID, IS_PRIORITY, LONG_SMS_NOW_NUMBER, LONG_SMS_TOTAL, MANAGER_TYPE, MSG_CONTENT, MSG_ID, MSG_IDS, MSG_TYPE_STR, MSG_TYPE_U32, NEED_RE_SEND, NODE_ID, PASSAGE_MSG_ID, RECEIVE_TIME, SEQ_ID, SEQ_IDS, SERVICE_ID, SP_ID, SRC_ID, STATE, WAIT_RECEIPT};
+use crate::protocol::names::{ACCOUNT_MSG_ID, SPEED_LIMIT, CAN_WRITE, DEST_ID, DEST_IDS, DURATION, ENTITY_ID, ID, IS_PRIORITY, LONG_SMS_NOW_NUMBER, LONG_SMS_TOTAL, MANAGER_TYPE, MSG_CONTENT, MSG_ID, MSG_IDS, MSG_TYPE_STR, MSG_TYPE_U32, NEED_RE_SEND, NODE_ID, PASSAGE_MSG_ID, RECEIVE_TIME, SEQ_ID, SEQ_IDS, SERVICE_ID, SP_ID, SRC_ID, STATE, WAIT_RECEIPT};
 use crate::protocol::MsgType;
 use crate::global::{CHANNEL_BUFF_NUM, TEMP_SAVE, TOPIC_TO_B_ACCOUNT_STATE_CHANGE, TOPIC_TO_B_DELIVER, TOPIC_TO_B_DELIVER_RESP, TOPIC_TO_B_FAILURE, TOPIC_TO_B_PASSAGE_STATE_CHANGE, TOPIC_TO_B_REPORT, TOPIC_TO_B_REPORT_RESP, TOPIC_TO_B_SUBMIT, TOPIC_TO_B_SUBMIT_RESP, message_sender};
 use crate::message_queue::KafkaMessageProducer;
@@ -11,7 +11,7 @@ use std::ops::{Add};
 use std::sync::atomic::AtomicU8;
 use std::sync::atomic::Ordering::SeqCst;
 use std::fmt::{Display, Formatter, Error};
-use std::result;
+use std::{result, usize};
 
 ///把超时的消息进行重发
 macro_rules! re_send {
@@ -56,7 +56,15 @@ macro_rules! send_entity_state {
 	($target: expr) => (
 		match $target.entity_type {
 			EntityType::Custom => $target.to_queue.send(TOPIC_TO_B_ACCOUNT_STATE_CHANGE, "", $target.state_change_json.to_string()).await,
-			EntityType::Server => $target.to_queue.send(TOPIC_TO_B_PASSAGE_STATE_CHANGE, "", $target.state_change_json.to_string()).await,
+			EntityType::Server => {
+				$target.state_change_json[STATE] = match ($target.is_buff_full, $target.now_conn_num.load(SeqCst)) {
+					(_, 0) => DISCONNECT.into(),
+					(true, _) => BUFF_FULL.into(),
+					(false, _) => CONNECT.into()
+				};
+
+				$target.to_queue.send(TOPIC_TO_B_PASSAGE_STATE_CHANGE, "", $target.state_change_json.to_string()).await;
+			}
 		}
 	);
 }
@@ -75,7 +83,9 @@ struct EntityRunContext {
 	to_queue: Arc<KafkaMessageProducer>,
 	now_conn_num: Arc<AtomicU8>,
 	state_change_json: JsonValue,
-	send_buff_cap : u32,
+	send_buff_cap: usize,
+	write_limit: usize,
+	is_buff_full: bool,
 }
 
 impl Display for EntityRunContext {
@@ -93,7 +103,8 @@ pub async fn start_entity(
 	node_id: u32, 
 	now_conn_num: Arc<AtomicU8>, 
 	entity_type: EntityType,
-	send_buff_cap: u32
+	send_buff_cap: usize,
+	write_limit: usize,
 ) {
 	let send_buff_cap = if send_buff_cap == 0 {
 		CHANNEL_BUFF_NUM
@@ -116,9 +127,11 @@ pub async fn start_entity(
 		state_change_json: json::object! {
 			msg_type: "PassageStateChange",
 			id: entity_id,
-			state: 0
+			state: DISCONNECT
 		},
 		send_buff_cap,
+		write_limit,
+		is_buff_full: false,
 	};
 
 	log::info!("新开始一个entity.{}", context);
@@ -218,6 +231,19 @@ async fn handle_from_channel_rx(msg: Option<JsonValue>, context: &mut EntityRunC
 									msg.remove(SPEED_LIMIT);
 									send_to_channels(msg, context).await;
 								} else {
+									//当缓冲区已满的时候进行判断，已到达可接收的时候发送消息
+									if context.is_buff_full {
+										for select in context.send_channels.iter() {
+											let buff_num = CHANNEL_BUFF_NUM - select.entity_to_channel_priority_tx.capacity() + CHANNEL_BUFF_NUM - select.entity_to_channel_common_tx.capacity();
+											context.is_buff_full = buff_num > context.write_limit;
+
+											if !context.is_buff_full {
+												send_entity_state!(context);
+												break;
+											}
+										}
+									}
+
 									msg[ACCOUNT_MSG_ID] = source.remove(ACCOUNT_MSG_ID);
 									msg[PASSAGE_MSG_ID] = msg.remove(MSG_ID);
 									
@@ -284,7 +310,12 @@ async fn handle_from_channel_rx(msg: Option<JsonValue>, context: &mut EntityRunC
 						}
 						(MsgType::Submit, Some(false)) |
 						(MsgType::Submit, None) => {
-							if let Some(total) = msg[LONG_SMS_TOTAL].as_u8() {
+							if msg[SPEED_LIMIT].as_bool().unwrap_or(false) {
+								//收到的消息是已超速，压回去，等待后续发送。
+								msg.remove(SPEED_LIMIT);
+								send_to_channels(msg, context).await;
+							}	else if let Some(total) = msg[LONG_SMS_TOTAL].as_u8() {
+								//长短信的处理
 								if let Some(mut json) = handle_long_sms(context, msg, total) {
 									send_to_queue!(&context.to_queue, TOPIC_TO_B_SUBMIT, "", json);
 								}
@@ -316,7 +347,7 @@ async fn handle_from_channel_rx(msg: Option<JsonValue>, context: &mut EntityRunC
 
 							//已经没有连接了.向外发连接断开消息
 							if context.send_channels.len() == 0 {
-								context.state_change_json[STATE] = 0.into();
+								context.state_change_json[STATE] = DISCONNECT.into();
 								send_entity_state!(context);
 							}
 						}
@@ -334,13 +365,12 @@ async fn handle_from_channel_rx(msg: Option<JsonValue>, context: &mut EntityRunC
 										entity_to_channel_common_tx,
 									});
 
-									//如果原连接数是0.转成现在有的话.向外发送已经连接消息
-									if context.now_conn_num.load(SeqCst) == 0 {
-										context.state_change_json[STATE] = 1.into();
+									context.now_conn_num.swap(context.send_channels.len() as u8, SeqCst);
+
+									//如果连接数只有一个.代表之前是空连接.向外发送已经连接消息
+									if context.now_conn_num.load(SeqCst) == 1 {
 										send_entity_state!(context);
 									}
-
-									context.now_conn_num.swap(context.send_channels.len() as u8, SeqCst);
 								} else {
 									log::error!("收到通道创建消息.但没有在临时存放里面找到它.msg:{}", msg);
 								}
@@ -487,7 +517,7 @@ async fn handle_from_manager_rx(msg: Option<JsonValue>, context: &mut EntityRunC
 				}
 				Some("passage.request.state") => {
 					log::info!("收到需要状态的消息。id:{}", context.entity_id);
-
+					
 					send_entity_state!(context);
 				}
 				Some("close") => {
@@ -499,7 +529,6 @@ async fn handle_from_manager_rx(msg: Option<JsonValue>, context: &mut EntityRunC
 						}
 					}
 
-					context.state_change_json[STATE] = 0.into();
 					send_entity_state!(context);
 					return false;
 				}
@@ -543,19 +572,23 @@ async fn send_to_channels(msg: JsonValue, context: &mut EntityRunContext) {
 			Some(select) => {
 				if select.can_write {
 					log::debug!("收到消息.分channel发送。通道:{}", &select.id);
-
-					//判断是否已经超出指定缓冲区大小
-					let buff_num = CHANNEL_BUFF_NUM - (select.entity_to_channel_priority_tx.capacity() + select.entity_to_channel_common_tx.capacity()) as u32;
-					if buff_num > context.send_buff_cap && !context.state_change_json[BUFFER_FULL].as_bool().unwrap_or(false) 
-						|| buff_num > (context.send_buff_cap * 2) //当缓存中的数量大于2倍，一直发，1倍时只发一次
-					{
-						context.state_change_json[BUFFER_FULL] = true.into();
-						send_entity_state!(context);
-					} else if buff_num < context.send_buff_cap / 2 {
-						if context.state_change_json.contains(BUFFER_FULL) {
+					
+					if context.entity_type == EntityType::Server && context.send_buff_cap < CHANNEL_BUFF_NUM {
+						//判断是否已经超出指定缓冲区大小
+						let buff_num = CHANNEL_BUFF_NUM - select.entity_to_channel_priority_tx.capacity() + CHANNEL_BUFF_NUM - select.entity_to_channel_common_tx.capacity();
+					
+						log::trace!("打印看一下，buff_num：{},send_buff_cap：{},is_buff_full：{}",
+							buff_num,context.send_buff_cap,context.is_buff_full
+						);
+						if buff_num > context.send_buff_cap && !context.is_buff_full 
+								// || buff_num % context.send_buff_cap == 0)  //每超过整数倍的时候发送一次
+						{
+							log::trace!("向消息队列发通道满状态，buff_num：{},send_buff_cap：{},is_buff_full：{}",
+								buff_num,context.send_buff_cap,context.is_buff_full
+							);
+							context.is_buff_full = true;
 							send_entity_state!(context);
 						}
-						context.state_change_json.remove(BUFFER_FULL);
 					}
 
 					let send = if priority {
@@ -593,5 +626,9 @@ async fn send_to_channels(msg: JsonValue, context: &mut EntityRunContext) {
 
 	//只有一个通道都没有的时候，才会走到这里.返回错误.同时发连接断开消息
 	context.to_queue.send(TOPIC_TO_B_FAILURE, "", send_msg.to_string()).await;
-	context.state_change_json[STATE] = 0.into();
+	send_entity_state!(context);
 }
+
+static DISCONNECT: u8 = 0u8;
+static CONNECT: u8 = 1u8;
+static BUFF_FULL: u8 = 2u8;
