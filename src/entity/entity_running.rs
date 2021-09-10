@@ -54,17 +54,15 @@ macro_rules! send_to_queue {
 
 macro_rules! send_entity_state {
 	($target: expr) => (
+		$target.state_change_json[STATE] = match ($target.is_buff_full, $target.now_conn_num.load(SeqCst)) {
+			(_, 0) => DISCONNECT.into(),
+			(true, _) => BUFF_FULL.into(),
+			(false, _) => CONNECT.into()
+		};
+
 		match $target.entity_type {
 			EntityType::Custom => $target.to_queue.send(TOPIC_TO_B_ACCOUNT_STATE_CHANGE, "", $target.state_change_json.to_string()).await,
-			EntityType::Server => {
-				$target.state_change_json[STATE] = match ($target.is_buff_full, $target.now_conn_num.load(SeqCst)) {
-					(_, 0) => DISCONNECT.into(),
-					(true, _) => BUFF_FULL.into(),
-					(false, _) => CONNECT.into()
-				};
-
-				$target.to_queue.send(TOPIC_TO_B_PASSAGE_STATE_CHANGE, "", $target.state_change_json.to_string()).await;
-			}
+			EntityType::Server => $target.to_queue.send(TOPIC_TO_B_PASSAGE_STATE_CHANGE, "", $target.state_change_json.to_string()).await
 		}
 	);
 }
