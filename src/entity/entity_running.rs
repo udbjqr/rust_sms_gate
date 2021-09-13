@@ -110,6 +110,11 @@ pub async fn start_entity(
 		send_buff_cap
 	};
 
+	let msg_type = match entity_type {
+    EntityType::Custom => "AccountStateChanges",
+    EntityType::Server => "PassageStateChange",
+	};
+
 	let mut context = EntityRunContext {
 		entity_id,
 		entity_type,
@@ -123,7 +128,7 @@ pub async fn start_entity(
 		to_queue: message_sender().clone(),
 		now_conn_num,
 		state_change_json: json::object! {
-			msg_type: "PassageStateChange",
+			msg_type: msg_type,
 			id: entity_id,
 			state: DISCONNECT
 		},

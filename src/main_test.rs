@@ -22,8 +22,8 @@ fn main() {
 	// log4rs::init_file("config/log_client.yaml", Default::default()).unwrap();
 
 	get_runtime().spawn(async move {
-		let addr = "47.114.180.42:7890".parse().unwrap();
-		// let addr = "127.0.0.1:7890".parse().unwrap();
+		// let addr = "47.114.180.42:7890".parse().unwrap();
+		let addr = "127.0.0.1:7890".parse().unwrap();
 		let socket = TcpSocket::new_v4().unwrap();
 		log::debug!("连接服务器：{:?}",socket);
 		let stream = socket.connect(addr).await.unwrap();
@@ -136,7 +136,7 @@ async fn start_work(framed: &mut Framed<TcpStream, Protocol>, protocol: Protocol
 		};
 
 
-		for d in 0..1 {
+		for d in 0..0 {
 			tokio::time::sleep(one_secs).await;
 			for i in 0..1 {
 				//修改内容		

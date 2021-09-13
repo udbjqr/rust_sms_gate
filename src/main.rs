@@ -5,7 +5,6 @@ use sms_gate::global::{message_sender, TOPIC_TO_B_LOWER_COMPUTER_INIT};
 fn main() {
 	//设置日志启动
 	log4rs::init_file("config/log.yaml", Default::default()).unwrap();
-
 	//使用enter 加载运行时。必须需要let _guard 要不没有生命周期。
 	let runtime = get_runtime();
 	let _guard = runtime.enter();
