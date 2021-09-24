@@ -1,6 +1,6 @@
 [package]
 name = "sms_gate"
-version = "0.3.3"
+version = "0.3.4"
 authors = ["udbjqr <udbjqr@sohu.com>"]
 edition = "2018"
 
@@ -34,3 +34,7 @@ path= "src/main_server.rs"
 [[bin]]
 name="sms_gate_test"
 path= "src/main_test.rs"
+
+[[bin]]
+name="test_server"
+path= "src/test_server.rs"
