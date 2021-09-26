@@ -32,9 +32,9 @@ fn main() {
 		let mut framed = Framed::new(stream, protocol.clone());
 
 		let mut login_msg = json::object! {
-				loginName: "101016",
+				loginName: "101319",
 				spId:"10683074",
-				password: "S6#j7Fgc!CXe",
+				password: "eZt0p295kJ",
 				protocolVersion: 0x30u32,
 				msg_type: "Connect"
 			};

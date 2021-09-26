@@ -231,8 +231,7 @@ async fn handle_from_channel_rx(msg: Option<JsonValue>, context: &mut EntityRunC
 
 								//收到的消息是已超速，压回去，等待后续发送。
 								if msg[SPEED_LIMIT].as_bool().unwrap_or(false) {
-									msg.remove(SPEED_LIMIT);
-									send_to_channels(msg, context).await;
+									send_to_channels(source, context).await;
 								} else {
 									//当缓冲区已满的时候进行判断，已到达可接收的时候发送消息
 									if context.is_buff_full {

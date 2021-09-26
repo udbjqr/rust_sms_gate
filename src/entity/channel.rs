@@ -142,7 +142,7 @@ impl Channel {
 		let mut framed = Framed::new(stream, self.protocol.clone());
 		if self.need_approve {
 			if let Err(e) = self.wait_conn(&mut framed, ip_addr).await {
-				log::error!("记录一下登录的错误。e:{}", e);
+				log::warn!("记录一下登录的错误。e:{}", e);
 				return;
 			}
 		}
@@ -226,6 +226,8 @@ impl Channel {
 							if msg_num + curr_tx > self.tx_limit {
 								log::trace!("长短信长度大于可发送长度。返回满。msg_num:{},curr_tx:{},tx_limit:{}", msg_num, curr_tx, self.tx_limit);
 								send[SPEED_LIMIT] = true.into();
+								//防止后面连续多条长短信
+								curr_tx = self.tx_limit;
 
 								if let Err(e) = channel_to_entity_tx.send(send).await {
 									log::error!("向实体发送消息出现异常, e:{}", e);
@@ -272,6 +274,9 @@ impl Channel {
 							if msg_num + curr_tx > self.tx_limit {
 								log::trace!("长短信长度大于可发送长度。返回满。msg_num:{},curr_tx:{},tx_limit:{}", msg_num, curr_tx, self.tx_limit);
 								send[SPEED_LIMIT] = true.into();
+								//防止后面连续多条长短信。设置值以后保证不再获取。
+								curr_tx = self.tx_limit;
+
 								if let Err(e) = channel_to_entity_tx.send(send).await {
 									log::error!("向实体发送消息出现异常, e:{}", e);
 									return;
@@ -444,7 +449,7 @@ impl Channel {
 				log::trace!("找到请求loginName对应的entity:{:?}", en);
 				en
 			} else {
-				log::error!("没有找到对应的login_name.退出.msg:{}", login_info);
+				log::warn!("没有找到对应的login_name.退出.msg:{}", login_info);
 				return (SmsStatus::AuthError, login_info);
 			}
 		} else {
