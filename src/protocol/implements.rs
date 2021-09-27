@@ -381,11 +381,12 @@ pub trait ProtocolImpl: Send + Sync {
 			}
 		};
 
-		let mut buf = BytesMut::with_capacity(12);
+		let mut buf = BytesMut::with_capacity(13);
 
-		buf.put_u32(12);
+		buf.put_u32(13);
 		buf.put_u32(self.get_type_id(MsgType::ActiveTestResp));
 		buf.put_u32(seq_id);
+		buf.put_u8(0);
 
 		Some(buf)
 	}
