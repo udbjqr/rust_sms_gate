@@ -1,6 +1,8 @@
 use tokio::sync::{mpsc};
 use json::JsonValue;
+use tokio::time;
 use std::sync::Arc;
+use std::time::Duration;
 use crate::entity::{ChannelStates, EntityType};
 use std::collections::HashMap;
 use crate::protocol::names::{ACCOUNT_MSG_ID, SPEED_LIMIT, CAN_WRITE, DEST_ID, DEST_IDS, DURATION, ENTITY_ID, ID, IS_PRIORITY, LONG_SMS_NOW_NUMBER, LONG_SMS_TOTAL, MANAGER_TYPE, MSG_CONTENT, MSG_ID, MSG_IDS, MSG_TYPE_STR, MSG_TYPE_U32, NEED_RE_SEND, NODE_ID, PASSAGE_MSG_ID, RECEIVE_TIME, SEQ_ID, SEQ_IDS, SERVICE_ID, SP_ID, SRC_ID, STATE, WAIT_RECEIPT};
@@ -531,6 +533,8 @@ async fn handle_from_manager_rx(msg: Option<JsonValue>, context: &mut EntityRunC
 						}
 					}
 
+					//有可能正在处理中，状态还未改变。因此在这里等3秒再操作发送状态
+					time::sleep(Duration::from_micros(3)).await;
 					send_entity_state!(context);
 					return false;
 				}
