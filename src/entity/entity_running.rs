@@ -113,7 +113,7 @@ pub async fn start_entity(
 	};
 
 	let msg_type = match entity_type {
-    EntityType::Custom => "AccountStateChanges",
+    EntityType::Custom => "AccountStateChange",
     EntityType::Server => "PassageStateChange",
 	};
 
